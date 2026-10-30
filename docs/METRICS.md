@@ -89,6 +89,7 @@ These apply to every definition below.
 - **Only complete periods are reported.** No D7 figure for a six-day-old cohort, no WAU for a week that hasn't ended.
 - **Who's missing.** Users with Do Not Track or Global Privacy Control on never send events, so they're absent rather than filtered. Traffic PostHog marks as bots is dropped.
 - **Real and synthetic data never mix silently.** Warehouse rows carry `source` (`posthog` or `synthetic`), and every chart says which it shows.
+- **Demo traffic is dropped.** Events with `is_demo = true` (the `?demo=1` mode used for testing and recordings) are excluded from every metric.
 
 ## Definitions
 
@@ -112,7 +113,7 @@ Why 24 hours: it covers "opened it between lectures, did the session that evenin
 | DAU, WAU | Distinct active users per UTC day and per ISO week. WAU is "weekly active users" in the tree. |
 | Weekly returning users | WAU members whose first-ever `session_started` was in an earlier week. WAU = new active users + returning users. |
 | Sessions started per active user | `session_started` events in the week ÷ WAU. |
-| Completion rate | Started sessions that end in `session_completed` ÷ started sessions, joined on `session_id` and counted in the week the session started. Sessions still open at the cutoff are left out. |
+| Completion rate | Started sessions that end in `session_completed` ÷ started sessions, joined on `session_id` and counted in the week the session started. Sessions still open at the cutoff are left out. Completions confirmed in the away check (`completed_while_away`) count, and are reported separately as a check on how much the number leans on self-report. |
 | Active days per week | Average DAU across the week ÷ WAU. Runs from 1/7 (everyone shows up once) to 1 (everyone shows up daily). |
 
 ### Retention
@@ -140,7 +141,7 @@ Over finished sessions, abandon rate is just 1 − completion rate, so listing i
 Watched every week, never targeted directly:
 
 - **Weekly focus minutes**: sum of `planned_minutes` over completed sessions. That's minutes of focus; pauses aren't included.
-- **Median planned minutes** of started sessions. If it slides down, people may be farming completions with short sessions.
+- **Length mix**: share of started sessions at 15, 25 and 50 minutes. If 15 keeps growing, people may be farming completions with short sessions.
 - **Streak length distribution** among WAU.
 - **Concentration**: share of WCS produced by the top 10% of users. ADR 0001 has a threshold for this.
 - **Event volume** against the PostHog free tier's monthly allowance. Going over would break the $0 rule.

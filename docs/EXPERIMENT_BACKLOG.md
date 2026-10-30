@@ -44,12 +44,13 @@ Every item has the same primary metric (activation rate) and the same guardrails
 
 ### 2. Shorter first sprint
 
-**ICE 6 / 6 / 9 = 21**
+**ICE 5 / 6 / 10 = 21**
 
-> Because we see that the first session is also the activation test, and 25 minutes is a lot to ask of someone who opened the app because they couldn't get started, we believe defaulting a new user's first session to 10 minutes will increase activation rate.
+> Because we see that the first session is also the activation test, and 25 minutes is a lot to ask of someone who opened the app because they couldn't get started, we believe preselecting 15 minutes (the shortest preset) for a new user's first session will increase activation rate.
 
-- **Change.** The default length for a device's first session is 10 minutes; after that it goes back to 25.
-- **Watch.** Median planned minutes and second-session completion. A short first session could teach people that short is normal, which is the farming risk noted in ADR 0001.
+- **Change.** A new user's length picker starts on 15 instead of 25. After the first session it remembers whatever they last chose, as it does today.
+- **Watch.** The length mix and second-session completion. A short first session could teach people that short is normal, which is the farming risk noted in ADR 0001.
+- **Updated 2026-10-30.** This was a 10-minute default; v1 shipped with presets only, so the test now uses the 15-minute preset, with impact cut by one point because the change is smaller.
 
 ### 3. Show the streak before it exists
 
@@ -69,14 +70,18 @@ Every item has the same primary metric (activation rate) and the same guardrails
 - **Change.** `document.title` updates once a second while a session runs.
 - **Note.** This would help completion for everyone, not only new users, so it's worth shipping even if the activation effect turns out small. It ranks below #3 only on the tie-break.
 
-### 5. Goal chips instead of a text box
+### 5. Show how close you are before giving up
 
-**ICE 5 / 4 / 7 = 16**
+**ICE 4 / 5 / 9 = 18**
 
-> Because we see that the goal field is an empty free-text box that first-timers will probably skip, and naming what you'll work on makes following through more likely, we believe replacing it with one-tap chips (Reading, Problem set, Lecture notes, Revision, Other) for new users will increase activation rate.
+> Because we see that the "Give up this sprint?" dialog says nothing about how far along the student is, so quitting at minute 22 of 25 feels the same as quitting at minute 2, we believe showing the time left and the progress ring in that dialog during a new user's first session will increase activation rate.
 
-- **Evidence.** Loosely based on the implementation-intentions research (Gollwitzer, 1999). A chip is a much weaker commitment than a real if-then plan, hence the low confidence.
-- **Side benefit.** Chips would let us track a `goal_category` enum without collecting free text. That needs a tracking-plan change first.
+- **Change.** The dialog reads "Only 3:12 left. Give up anyway?" with the ring, instead of "It won't count toward your streak."
+- **Watch.** `elapsed_seconds` on give-ups; the effect should show up as fewer late give-ups, not early ones.
+
+### Retired: goal chips instead of a text box
+
+This was #5 (ICE 16). Day 2 shipped chips as the v1 design, because free text was ruled out for privacy, so there's nothing left to test. Tracking a `goal_category` enum from the chips is still possible later, with a tracking-plan change first.
 
 ## Parked
 

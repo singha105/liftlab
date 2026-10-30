@@ -29,7 +29,7 @@ The North Star is **weekly completed sessions (WCS)**: the count of `session_com
 
 ## Consequences
 
-- Session length becomes something people could game: shorter sessions mean more completions. The 10-minute floor on custom sessions limits that, and median planned minutes is tracked as a health metric.
+- Session length becomes something people could game: shorter sessions mean more completions. v1 only offers 15, 25 and 50 minutes, so no session is shorter than 15, and the length mix is tracked as a health metric.
 - Heavy users count for more than light ones. A student who does four sessions a day adds four times as much as one who does one. We're fine with that while it reflects real study, and we track concentration so we notice if it doesn't.
 - Weekly focus minutes stays on the dashboard as a health metric, so we can still see whether total focus time is going up.
 - Every experiment's pre-registration has to name the input it targets: WAU, sessions per active user or completion rate.
@@ -38,5 +38,9 @@ The North Star is **weekly completed sessions (WCS)**: the count of `session_com
 
 - The top 10% of users produce more than half of WCS for four weeks running. Then switch to **weekly focused students** (users with at least two completed sessions in the week), which counts how many people the product helps, not how often.
 - Real usage data shows week-1 completions predict D28 retention no better than week-1 app opens. Synthetic data can't answer this, because the generator is built on the same assumption.
-- Median planned minutes drops below 15 and stays there.
+- More than half of completed sessions are 15-minute ones for four weeks running.
 - A later version adds accounts or a paid tier, which makes revenue-linked metrics measurable.
+
+## Amendments
+
+- **2026-10-30.** Day 2 dropped custom session lengths (it had been 10 to 90 minutes), so the shortest session is now 15 minutes. The farming guard and its revisit trigger above were updated to match. The decision itself is unchanged.

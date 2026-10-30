@@ -20,8 +20,8 @@ They've tried timers. A bare Pomodoro clock gives them nothing to come back for.
 set a session → focus → complete → see streak → come back
 ```
 
-1. **Set a session.** Pick 15, 25 or 50 minutes (or a custom length from 10 to 90) and, if you like, type a one-line goal.
-2. **Focus.** The timer takes over the page with almost nothing else on it. You can pause, resume or end early.
+1. **Set a session.** Pick 15, 25 or 50 minutes and, if you like, tap what you're working on (Reading, Problem set, and so on).
+2. **Focus.** The timer takes over the page with almost nothing else on it. You can pause, resume or give up.
 3. **Complete.** When the timer reaches zero, the session counts.
 4. **See streak.** The completion screen shows your streak: consecutive local calendar days with at least one completed session.
 5. **Come back.** The streak and the weekly summary are the reasons to open it again tomorrow.
@@ -34,17 +34,19 @@ In:
 
 | Feature | What it does |
 |---|---|
-| Timer | 15 / 25 / 50-minute presets plus custom 10–90 minutes. Pause, resume, end early. Counts from timestamps, so a background tab or a sleeping laptop doesn't drift, and a reload resumes the running session. |
-| Session goal | Optional one-line note shown while the timer runs. It stays on the device and is never sent to analytics. |
+| Timer | 15, 25 or 50 minutes. Pause, resume, give up. Counts from timestamps, so a background tab or a sleeping laptop doesn't drift, and a reload resumes the running session. If the timer ran out while the page was closed, the next visit asks whether you finished. |
+| Session goal | Optional, picked from preset chips, so there's no free-text box. Shown while the timer runs; it stays on the device and only "a goal was set" reaches analytics. |
 | Completion | The timer reaching zero marks the session done and shows the completion screen. |
 | Streak | Current and longest streak, in local calendar days. |
-| Weekly summary | Sessions completed and minutes focused this week, next to last week. |
+| Weekly summary | Sessions completed and minutes focused this week, next to last week. Opens by itself on the first visit of a new week. |
+| Demo mode | `?demo=1` runs every timer in seconds, for testing and screen recordings, with separate storage so it never touches a real streak. |
 
 Out, and why:
 
 - **Accounts.** Sign-up is exactly the friction we're trying to remove, and it would mean storing emails.
 - **Sync across devices.** Needs accounts and a backend. In v1 a streak belongs to one browser.
 - **Social** (friends, leaderboards, sharing). Comparison isn't the job, and it needs real identities.
+- **Custom lengths.** Three presets keep the first screen to one decision; a custom length can come back if data asks for it.
 - Also out: push notifications, task lists, calendar or LMS integrations, sounds and music, a paid plan.
 
 ## Constraints
