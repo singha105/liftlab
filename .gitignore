@@ -1,0 +1,24 @@
+# Dependencies and build output
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Data stays local; only the folder skeleton is committed
+data/**
+!data/**/
+!data/**/.gitkeep
+data/raw/*.csv
+*.duckdb
+*.duckdb.wal
+
+# OS
+.DS_Store
