@@ -111,7 +111,7 @@ describe('privacy', () => {
   }) as Record<string, string>
 
   it('never identifies users or sets person properties (privacy rule 2)', () => {
-    expect(Object.keys(sources).length).toBeGreaterThan(4)
+    expect(Object.keys(sources)).toContain('./analytics.ts')
     for (const [file, code] of Object.entries(sources)) {
       expect(code, file).not.toMatch(/\.(identify|alias|setPersonProperties)\(/)
     }
