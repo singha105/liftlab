@@ -25,7 +25,9 @@ liftlab/
 │   ├── ANALYTICS.md           the warehouse, the models, the simulator and its ground truth
 │   ├── decisions/             decision records
 │   └── PROGRESS.md            day-by-day log
-├── .github/workflows/deploy-app.yml   test, build and deploy app/ to Pages
+├── .github/workflows/
+│   ├── deploy-app.yml   test, build and deploy app/ to Pages
+│   └── analysis.yml     ruff and pytest for analysis/ on every push
 ├── .env.example    PostHog settings for event export (copy to .env)
 └── LICENSE         MIT
 ```
