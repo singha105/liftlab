@@ -30,6 +30,8 @@ The first level under the North Star is an exact identity:
 WCS = weekly active users × sessions started per active user × completion rate
 ```
 
+The identity is exact when completions are counted in the week their session started, which is how completion rate counts them. The North Star counts a completion in the week it happens, so the two differ only by sessions that run across midnight at the end of a Sunday (UTC), which is well under 1% of a week's sessions. `north_star_weekly` shows both (`weekly_completed_sessions` and `wcs_from_identity`).
+
 Levels below that are drivers. They push their parent up or down, but they don't multiply out to it exactly. Guardrails (dashed) aren't targets; experiments must not make them worse.
 
 ```mermaid
@@ -88,7 +90,8 @@ These apply to every definition below.
 - **Metric time is UTC.** Days are UTC calendar days; weeks are ISO weeks starting Monday. The in-app streak uses the student's local date instead, because that's what the student sees. The two can disagree around midnight, and that's fine.
 - **Only complete periods are reported.** No D7 figure for a six-day-old cohort, no WAU for a week that hasn't ended.
 - **Who's missing.** Users with Do Not Track or Global Privacy Control on never send events, so they're absent rather than filtered. Traffic PostHog marks as bots is dropped.
-- **Real and synthetic data never mix silently.** Warehouse rows carry `source` (`posthog` or `synthetic`), and every chart says which it shows.
+- **Real and synthetic data never mix silently.** Warehouse rows carry `source` (`posthog`, `synthetic` or `csv`), every model keeps it and groups by it, and every table and chart says which it shows.
+- **An event counts once.** Deliveries with the same event `uuid` are duplicates; the first one is kept.
 - **Demo traffic is dropped.** Events with `is_demo = true` (the `?demo=1` mode used for testing and recordings) are excluded from every metric.
 
 ## Definitions
@@ -104,6 +107,19 @@ These apply to every definition below.
 | Time to first completion | Median time from first `app_opened` to first `session_completed`, among activated users. |
 
 Why 24 hours: it covers "opened it between lectures, did the session that evening", which is still the same study day. A longer window would mostly count people who came back, and that's retention's job.
+
+### Activation funnel
+
+New users with at least 7 full days of data, through four steps. Each step is a subset of the one before it, so the funnel only shrinks.
+
+| Step | A new user reaches it when |
+|---|---|
+| `app_opened` | They're new: every member of the cohort. |
+| `session_started` | They start a session within 24 hours of their first `app_opened`. The share reaching this step is the start rate. |
+| `session_completed` | They complete a session within 24 hours of their first `app_opened`, so they're activated. |
+| `second_session_7d` | They start another session after that first completion, within 7 days of their first `app_opened`. |
+
+Step conversion is users at a step ÷ users at the step before. Overall conversion is users at a step ÷ users at the first step. The cohort needs 7 days so that all four steps are measured on the same people; the activation rate above only needs 24 hours, so the two can differ slightly.
 
 ### Engagement
 
@@ -123,7 +139,7 @@ Why 24 hours: it covers "opened it between lectures, did the session that evenin
 - Coming back means starting a session, not just opening the app.
 - Exact day, not "day n or later". It's noisier (students skip weekends), but it's the standard form and it has the same shape as `retention_1` and `retention_7` in the Cookie Cats data analyzed on Day 6, so the two readouts compare like with like.
 - The denominator is every new user, activated or not. Retention of activated users only is a useful cut, but it isn't the headline number.
-- A cohort's Dn is reported once day n has fully ended.
+- A cohort's Dn is reported once day n has fully ended. Weekly cohorts group day-0 cohorts by ISO week, so a weekly cohort's Dn waits until its last member's day n has ended: 7 + n days after the week starts.
 
 ### Guardrails
 
@@ -143,7 +159,7 @@ Watched every week, never targeted directly:
 - **Weekly focus minutes**: sum of `planned_minutes` over completed sessions. That's minutes of focus; pauses aren't included.
 - **Length mix**: share of started sessions at 15, 25 and 50 minutes. If 15 keeps growing, people may be farming completions with short sessions.
 - **Streak length distribution** among WAU.
-- **Concentration**: share of WCS produced by the top 10% of users. ADR 0001 has a threshold for this.
+- **Concentration**: share of the week's completions produced by the top 10% of that week's active users, ranked by completions. ADR 0001 has a threshold for this.
 - **Event volume** against the PostHog free tier's monthly allowance. Going over would break the $0 rule.
 
 ## Known data problems

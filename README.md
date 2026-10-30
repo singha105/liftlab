@@ -13,7 +13,8 @@ StudySprint sends anonymous usage analytics only: no account, no names or emails
 ```
 liftlab/
 ├── app/            StudySprint: Vite + TypeScript, deployed to GitHub Pages
-├── analysis/       Python package `liftlab`: warehouse, metric SQL, stats library, tests
+├── analysis/       Python package `liftlab`: simulator, DuckDB warehouse, stats library, tests
+│   └── sql/        the six SQL models, built in order by `liftlab build`
 ├── data/           local only, gitignored: raw downloads, event exports, DuckDB files
 │   └── raw/
 ├── docs/
@@ -21,6 +22,7 @@ liftlab/
 │   ├── METRICS.md             North Star, metric tree, exact definitions
 │   ├── TRACKING_PLAN.md       every event, its properties, privacy rules
 │   ├── EXPERIMENT_BACKLOG.md  ICE-ranked hypotheses
+│   ├── ANALYTICS.md           the warehouse, the models, the simulator and its ground truth
 │   ├── decisions/             decision records
 │   └── PROGRESS.md            day-by-day log
 ├── .github/workflows/deploy-app.yml   test, build and deploy app/ to Pages
@@ -42,15 +44,21 @@ cd app && npm test
 
 Analytics stay off locally unless you copy `app/.env.example` to `app/.env.local` and add a PostHog project key. The deployed build gets `VITE_POSTHOG_KEY` and `VITE_POSTHOG_HOST` from repository variables in [the deploy workflow](.github/workflows/deploy-app.yml).
 
-The analysis package needs [uv](https://docs.astral.sh/uv/):
+The analysis package needs [uv](https://docs.astral.sh/uv/). This simulates 20,000 users, loads them into DuckDB, builds the funnel, retention and North Star models, and prints them:
 
 ```bash
-cd analysis && uv sync && uv run pytest
+cd analysis && uv run liftlab load --source synthetic && uv run liftlab build && uv run liftlab report
 ```
+
+```bash
+cd analysis && uv run pytest
+```
+
+The numbers it prints are **synthetic**: simulated users with known ground truth, used to check that the SQL measures what it should. [ANALYTICS.md](docs/ANALYTICS.md) explains the models, the simulator and how to pull real events from PostHog.
 
 ## Status
 
-Day 2 of 7: StudySprint is live and instrumented. See [docs/PROGRESS.md](docs/PROGRESS.md).
+Day 3 of 7: the warehouse, SQL models and simulator are in, checked against ground truth. See [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## License
 
