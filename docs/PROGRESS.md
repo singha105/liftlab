@@ -157,6 +157,7 @@ A dash means the period hasn't ended for every member of the cohort yet.
 | Edge cases | A user with no sessions; duplicate events, both same-uuid and a resend with a new uuid; a session crossing Sunday midnight; the 24-hour activation boundary to the second; no-end sessions, both stale and still open; demo and unplanned events; incomplete weeks and cohorts. |
 | `ruff check`, `ruff format --check` | Clean. |
 | Full run from the CLI | load 3.8 s, build 1.3 s, report prints labelled tables. The warehouse is 96 MB and gitignored. |
+| Analysis CI | `.github/workflows/analysis.yml` runs `uv sync --locked`, ruff and pytest on every push and pull request, with uv pinned to the version that wrote `uv.lock`. Green: [run 41068192929](https://github.com/singha105/liftlab/actions/runs/41068192929), 38 tests in 22 s, 32 s in all. |
 
 ### Definitions pinned down in METRICS.md
 
