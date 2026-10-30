@@ -96,3 +96,100 @@ Live: **https://singha105.github.io/liftlab/** (demo mode: [?demo=1](https://sin
 - Synthetic event generator that follows the tracking plan exactly, using the backlog's assumed baselines.
 - DuckDB warehouse and the METRICS.md definitions as SQL: activation, D1/D7/D28, WCS and its three factors, guardrails.
 - Needs from Arnab: the PostHog key (above), and a Personal API key with read access in `.env` if we pull real events.
+
+## Day 3, 2026-10-30: simulator, warehouse and SQL models
+
+Every number in this entry is **synthetic**: simulated users with known ground truth, not real usage.
+
+### Done
+
+- **Simulator** (`analysis/src/liftlab/simulate.py`).
+  - Each user gets a latent motivation that drives starting, finishing, retrying, daily visits, extra sprints and churn.
+  - Events follow the tracking plan exactly and look like a PostHog export, including 0.3% duplicate deliveries and 0.4% demo users for the warehouse to remove.
+  - It returns a `GroundTruth` computed from the model itself: the start rate, activation rate, D1–D28 curve and expected North Star per week. It also returns a per-user table.
+  - Same seed, same output. 20,000 users and 358,000 events take 2.3 s, against a 30 s limit.
+- **Experiment mode.**
+  - Users are split 50/50 and exposed at their first visit after the start.
+  - The activation effect is solved for so the true effect is exactly the number configured.
+  - The sessions effect is exact for returning users.
+  - `pre_sessions`, the sessions started in the 28 days before exposure, is the CUPED covariate.
+  - `srm_loss` drops test exposures to produce a sample-ratio mismatch, and new test users' first sprints use `quick_start`.
+- **Warehouse.** `uv run liftlab load --source synthetic|posthog|csv` loads `raw_events` into `data/warehouse.duckdb`. Rows are tagged by source, and loading a source replaces only that source. `warehouse_meta` records where each source's data ends, and `sim_truth` keeps the ground truth.
+- **Six SQL models** in `analysis/sql/`, built in order by `liftlab build` in about 1 s: `stg_events`, `fct_sessions`, `dim_users`, `funnel_activation`, `retention_cohorts` and `north_star_weekly`. The last one has the North Star and every input in the metric tree, plus the identity check. Every model keeps `source`.
+- **PostHog export.**
+  - `uv run liftlab export-posthog` uses the documented query API (`POST /api/projects/:id/query/`, HogQL).
+  - It pages by timestamp, because OFFSET is rejected for personal keys, and removes duplicates by `uuid` where pages meet.
+  - The key is read from `.env` only and never printed.
+  - It's tested against a fake server, **but hasn't run against PostHog**: there's no personal API key or project ID yet, so the command exits with a "not set in .env" message.
+- `docs/ANALYTICS.md`: how to run it, a Mermaid diagram of the models, the simulator and its ground truth, and three example questions with their SQL and results.
+
+### Funnel and retention (synthetic, seed 7, 20,000 users)
+
+| step | users | step conversion | overall | drop-off |
+|---|---|---|---|---|
+| app_opened | 16,881 | 100.0% | 100.0% | 0 |
+| session_started | 8,362 | 49.5% | 49.5% | 8,519 |
+| session_completed | 5,069 | 60.6% | 30.0% | 3,293 |
+| second_session_7d | 4,750 | 93.7% | 28.1% | 319 |
+
+**The biggest drop-off is the first step.** 8,519 of 16,881 new users (50.5%) never start a sprint in their first 24 hours. The next biggest is starters who don't finish: 3,293, or 39% of those who start. Both are assumptions built into the simulator rather than findings, but they make the case for Quick Start (backlog #1), which targets exactly that first step.
+
+| cohort week | users | D1 | D7 | D28 |
+|---|---|---|---|---|
+| 2026-08-31 | 1,949 | 24.3% | 16.1% | 8.5% |
+| 2026-09-07 | 2,134 | 26.0% | 15.1% | 8.2% |
+| 2026-09-14 | 2,295 | 25.2% | 14.6% | 8.2% |
+| 2026-09-21 | 2,450 | 24.4% | 13.8% | 8.2% |
+| 2026-09-28 | 2,448 | 24.6% | 15.2% | – |
+| 2026-10-05 | 2,704 | 24.3% | 16.3% | – |
+| 2026-10-12 | 2,901 | 25.6% | 13.8% | – |
+| 2026-10-19 | 3,056 | – | – | – |
+
+A dash means the period hasn't ended for every member of the cohort yet.
+
+### Checks
+
+| Check | Result |
+|---|---|
+| `uv run pytest` | Pass, 38 tests in about 10 s. They cover determinism, speed, events matching TRACKING_PLAN.md exactly (property names, types and enum values), and experiment effects, SRM and the covariate. Also SQL against ground truth, the edge cases, the PostHog export and the CLI. |
+| SQL vs ground truth | Activation 29.95% against a true 30.69% (−2.2 SE, inside the 1-point threshold). D1 −0.5 SE, D7 14.93% against 15.15% (−0.8 SE), D28 −1.3 SE. Weekly North Star between −0.3 and −3.1 SE, all inside 4 SE. |
+| Is the gap a bias? | No. Seed 7 drew a slightly low sample, and all its gaps point the same way because it's the same users every week. Across seeds 1–6, SQL activation averages 30.69%, the truth exactly, and weekly completions average within 1%. Activation also matches the simulator user by user. |
+| Edge cases | A user with no sessions; duplicate events, both same-uuid and a resend with a new uuid; a session crossing Sunday midnight; the 24-hour activation boundary to the second; no-end sessions, both stale and still open; demo and unplanned events; incomplete weeks and cohorts. |
+| `ruff check`, `ruff format --check` | Clean. |
+| Full run from the CLI | load 3.8 s, build 1.3 s, report prints labelled tables. The warehouse is 96 MB and gitignored. |
+
+### Definitions pinned down in METRICS.md
+
+The SQL needed a few definitions the doc didn't have yet. None of them changes an existing metric:
+
+- **Activation funnel.** A new section: the four steps, defined on new users with 7 full days of data so that every step is measured on the same people.
+- **Weekly retention cohorts.** A weekly cohort's Dn is reported once its last member's day n has ended, which is 7 + n days after the week starts.
+- **The metric-tree identity.** It's exact when completions are counted by the week the session started. The North Star counts them by the week they happen, so the two differ by sessions that run across Sunday midnight UTC. `north_star_weekly` shows both, and they're within 1% of each other in every week.
+- **Concentration** is now the top 10% of the week's *active* users.
+- **New ground rules.** Duplicates by event `uuid` count once, and `csv` is a third source.
+
+The tracking plan didn't change.
+
+### Decisions
+
+- **Truth comes from the model, not the sample.** It's the population value, so the tests allow for sampling error (four standard errors, or the 1-point threshold for activation and D7) rather than expecting an exact match. This is also what Day 5 needs to check whether confidence intervals cover the true effect.
+- **First-day timing is designed so activation is exact.** Every first-day sprint ends within 22.3 hours of arrival, and later visits start at least 24 hours after it, so timing can't blur activation. D1 still includes first-day sprints that start after UTC midnight, and the truth integrates that in closed form.
+- **The weekly North Star truth counts sessions by the day they started.** The SQL counts completions when they happen. The difference is the Sunday-midnight sessions above, far inside the tolerance.
+- **The query API, not batch exports, for PostHog.** PostHog says `/query` isn't meant for large exports. StudySprint's real volume is tiny, though, so paging the query API is fine and costs nothing. If it ever passes 50,000 events a day, switch to a batch export.
+- **Dependencies:** duckdb 2.0, numpy 2.5 and pandas 3.1. No SciPy needed yet: the quadrature comes from NumPy.
+
+### Worth knowing
+
+- **The backlog's baselines are aggressive taken together.** A 15% D7 with 30% activation means 46% of activated users come back on day 7 exactly (query 3 in ANALYTICS.md), and 94% start another session within a week. Real students are unlikely to be that loyal. When real data exists, re-check the D7 assumption first, since it also sets the Day 4 sample size.
+- Sprints with a goal finish 8 to 11 points more often at every length. In the simulator a quarter to a third of that is selection, because motivated users pick goals more. Real data would have the same confounding.
+
+### Open
+
+- **PostHog keys.** The front-end `VITE_POSTHOG_KEY` is still unset (Day 2), so the live app sends nothing. The export also needs `POSTHOG_PROJECT_ID` and a `POSTHOG_PERSONAL_API_KEY` with the query:read scope in `.env`.
+- The Day 2 check of events in PostHog's Activity view is still pending, for the same reason.
+
+### Next: Day 4
+
+- Pre-register the Quick Start experiment, sizing it from the 30% activation baseline.
+- Add the PostHog feature flag and the app change, firing `experiment_exposed` only where the arms differ.
+- Do a simulated readout with `Experiment(audience="new")`.
