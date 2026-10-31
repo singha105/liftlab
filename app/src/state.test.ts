@@ -27,6 +27,7 @@ describe('loadState', () => {
         lastGoal: 'my secret plans',
         history: { 'not-a-date': { sessions: 1 }, '2026-10-29': { sessions: 2, minutes: 50 } },
         active: { id: 'x', plannedMinutes: 25 },
+        experiments: { 'exp-001': 'test', 'exp-000': 'treatment', broken: 7 },
       }),
     )
     const state = loadState('k')
@@ -35,5 +36,12 @@ describe('loadState', () => {
     expect(state.lastGoal).toBeNull()
     expect(state.history).toEqual({ '2026-10-29': { sessions: 2, minutes: 50 } })
     expect(state.active).toBeNull()
+    expect(state.experiments).toEqual({ 'exp-001': 'test' })
+  })
+
+  it('keeps no arms for a state saved before experiments existed', () => {
+    const { experiments: _, ...before } = freshState()
+    localStorage.setItem('k', JSON.stringify({ ...before, sessionsStarted: 2 }))
+    expect(loadState('k')).toEqual({ ...freshState(), sessionsStarted: 2 })
   })
 })

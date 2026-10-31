@@ -16,7 +16,11 @@ export interface State {
   lastGoal: GoalId | null
   /** Monday of the last week the summary opened for (or was skipped for). */
   summaryWeek: string | null
+  /** This device's arm in each experiment it was exposed to, by experiment key. */
+  experiments: Record<string, Arm>
 }
+
+export type Arm = 'control' | 'test'
 
 export function freshState(): State {
   return {
@@ -30,6 +34,7 @@ export function freshState(): State {
     lastLength: DEFAULT_LENGTH,
     lastGoal: null,
     summaryWeek: null,
+    experiments: {},
   }
 }
 
@@ -38,6 +43,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0)
 const isLength = (v: unknown): v is SessionLength => LENGTHS.some((l) => l === v)
 const isGoal = (v: unknown): v is GoalId => GOALS.some((g) => g.id === v)
+const isArm = (v: unknown): v is Arm => v === 'control' || v === 'test'
 
 function readActive(v: unknown): ActiveSession | null {
   if (!isRecord(v) || typeof v.id !== 'string' || !isLength(v.plannedMinutes)) return null
@@ -51,6 +57,13 @@ function readActive(v: unknown): ActiveSession | null {
     pausedMs: count(v.pausedMs),
     pauseCount: count(v.pauseCount),
   }
+}
+
+function readExperiments(v: unknown): Record<string, Arm> {
+  const experiments: Record<string, Arm> = {}
+  if (!isRecord(v)) return experiments
+  for (const [key, arm] of Object.entries(v)) if (isArm(arm)) experiments[key] = arm
+  return experiments
 }
 
 function readHistory(v: unknown): History {
@@ -78,6 +91,7 @@ export function loadState(key: string): State {
   state.lastLength = isLength(saved.lastLength) ? saved.lastLength : DEFAULT_LENGTH
   state.lastGoal = isGoal(saved.lastGoal) ? saved.lastGoal : null
   state.summaryWeek = typeof saved.summaryWeek === 'string' ? saved.summaryWeek : null
+  state.experiments = readExperiments(saved.experiments)
   return state
 }
 

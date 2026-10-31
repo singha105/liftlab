@@ -16,3 +16,16 @@ export type GoalId = (typeof GOALS)[number]['id']
 export function isDemo(search: string): boolean {
   return new URLSearchParams(search).get('demo') === '1'
 }
+
+/** The running experiment: docs/experiments/EXP-001.md. */
+export const EXPERIMENT_KEY = 'exp-001'
+
+/**
+ * ?demo=1&variant=test previews an experiment arm. Demo mode is never enrolled and its events
+ * are dropped from analysis, so a preview sends no exposure and is never counted.
+ */
+export function previewVariant(search: string): 'control' | 'test' | null {
+  const params = new URLSearchParams(search)
+  const variant = params.get('variant')
+  return isDemo(search) && (variant === 'control' || variant === 'test') ? variant : null
+}

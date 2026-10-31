@@ -224,27 +224,35 @@ describe('capture', () => {
 })
 
 describe('getVariant', () => {
-  it('is control when PostHog is not running', async () => {
+  it('has no arm when PostHog is not running', async () => {
     vi.stubEnv('VITE_POSTHOG_KEY', '')
     const a = await freshAnalytics()
     a.initAnalytics(SUPER)
-    await expect(a.getVariant('quick-start')).resolves.toBe('control')
+    await expect(a.getVariant('exp-001')).resolves.toBeNull()
   })
 
-  it('reads the flag without sending $feature_flag_called', async () => {
+  it.each(['test', 'control'])('reads %s without sending $feature_flag_called', async (value) => {
     posthog.onFeatureFlags.mockImplementation((callback: () => void) => callback())
-    posthog.getFeatureFlag.mockReturnValue('test')
+    posthog.getFeatureFlag.mockReturnValue(value)
     const a = await freshAnalytics()
     a.initAnalytics(SUPER)
-    await expect(a.getVariant('quick-start')).resolves.toBe('test')
-    expect(posthog.getFeatureFlag).toHaveBeenCalledWith('quick-start', { send_event: false })
+    await expect(a.getVariant('exp-001')).resolves.toBe(value)
+    expect(posthog.getFeatureFlag).toHaveBeenCalledWith('exp-001', { send_event: false })
   })
 
-  it('falls back to control when flags are slow', async () => {
+  it.each([undefined, false, true, 'holdout'])('has no arm when the flag is %s', async (value) => {
+    posthog.onFeatureFlags.mockImplementation((callback: () => void) => callback())
+    posthog.getFeatureFlag.mockReturnValue(value)
+    const a = await freshAnalytics()
+    a.initAnalytics(SUPER)
+    await expect(a.getVariant('exp-001')).resolves.toBeNull()
+  })
+
+  it('has no arm when flags are slow, rather than defaulting to control', async () => {
     posthog.onFeatureFlags.mockImplementation(() => () => undefined)
     const a = await freshAnalytics()
     a.initAnalytics(SUPER)
-    await expect(a.getVariant('quick-start', 20)).resolves.toBe('control')
+    await expect(a.getVariant('exp-001', 20)).resolves.toBeNull()
   })
 })
 

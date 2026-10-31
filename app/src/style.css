@@ -204,6 +204,13 @@ main {
 
 /* ---- Setup ----------------------------------------------------------------------- */
 
+/* EXP-001's test arm: one large button in place of the three choices. */
+.quick-start {
+  min-height: 64px;
+  margin-top: 1.75rem;
+  font-size: 1.125rem;
+}
+
 .field {
   margin: 1.5rem 0;
   padding: 0;

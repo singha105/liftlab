@@ -221,25 +221,28 @@ export const trackExperimentExposed = (p: EventProps<'experiment_exposed'>) =>
   capture('experiment_exposed', p)
 
 /**
- * This user's arm of a feature-flag experiment. Anything short of a loaded flag that says
- * "test" (no key, Do Not Track, opted out, blocked, slow network) counts as control.
+ * This user's arm of a feature-flag experiment, or null if they aren't in it: no key, Do Not
+ * Track, opted out, blocked, a slow network, or a flag that isn't control or test. The app
+ * shows control to anyone without an arm, but only users with one are exposed, so a slow
+ * network can't quietly add people to the control arm.
  */
-export function getVariant(flagKey: string, timeoutMs = 1500): Promise<Variant> {
+export function getVariant(flagKey: string, timeoutMs = 1500): Promise<Variant | null> {
   return new Promise((resolve) => {
     let settled = false
-    const settle = (variant: Variant) => {
+    const settle = (variant: Variant | null) => {
       if (!settled) {
         settled = true
         resolve(variant)
       }
     }
-    setTimeout(() => settle('control'), timeoutMs)
-    if (!loading) return settle('control')
+    setTimeout(() => settle(null), timeoutMs)
+    if (!loading) return settle(null)
     void loading.then((posthog) => {
-      if (!posthog) return settle('control')
-      posthog.onFeatureFlags(() =>
-        settle(posthog.getFeatureFlag(flagKey, { send_event: false }) === 'test' ? 'test' : 'control'),
-      )
+      if (!posthog) return settle(null)
+      posthog.onFeatureFlags(() => {
+        const value = posthog.getFeatureFlag(flagKey, { send_event: false })
+        settle(value === 'control' || value === 'test' ? value : null)
+      })
     })
   })
 }

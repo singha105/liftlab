@@ -1,6 +1,6 @@
 # StudySprint tracking plan
 
-Version 2, 2026-10-30
+Version 3, 2026-10-30
 
 This is every event StudySprint sends. If an event or property isn't in this file, the app doesn't send it. In code the plan is the `PLAN` object in [`app/src/analytics.ts`](../app/src/analytics.ts): each event gets a typed tracking function derived from it, so an unplanned event or property fails the TypeScript build, and a test fails if `PLAN` and this file disagree.
 
@@ -22,7 +22,7 @@ Registered once at startup as PostHog super properties, so they ride along on ev
 | `variant` | enum(control, test, none) | This user's arm in that experiment, or `none`. |
 | `is_demo` | bool | The page was opened with `?demo=1`. Analysis drops these events. |
 
-PostHog adds its standard properties too: the anonymous `distinct_id`, the timestamp, and browser, OS, device, screen and page-URL fields such as `$browser`, `$os`, `$device_type` and `$current_url`. We keep those, minus IP addresses, timezone, query strings and person properties (see the privacy rules).
+PostHog adds its standard properties too: the anonymous `distinct_id`, the timestamp, and browser, OS, device, screen and page-URL fields such as `$browser`, `$os`, `$device_type` and `$current_url`. Once flags have loaded it also adds `$active_feature_flags` and one `$feature/<flag>` property per flag, such as `$feature/exp-001: test`; PostHog's experiment view reads the arm from `$feature/exp-001` on `experiment_exposed`. We keep those, minus IP addresses, timezone, query strings and person properties (see the privacy rules).
 
 ## Events
 
@@ -63,9 +63,14 @@ A running session is saved to localStorage, so a reload or a crashed tab resumes
 ## Experiment exposure
 
 - `experiment_exposed` fires when the screen that differs between arms renders, not when the flag is evaluated. A user who never reaches that screen isn't in the analysis.
-- It fires once per user per experiment; the app remembers in localStorage. The analysis still uses each user's first exposure, in case a cleared cache sends it twice.
-- The flag is read through `getVariant()` in `analytics.ts`, once per page load, with `send_event: false`, so PostHog's own `$feature_flag_called` is never sent. Anything short of a loaded flag that says `test` (no key, Do Not Track, opted out, blocked, slow network) is control.
+- It fires once per user per experiment; the app keeps the arm in localStorage and registers `experiment_key` and `variant` as super properties from then on, on every later visit too. The analysis still uses each user's first exposure, in case a cleared cache sends it twice.
+- The flag is read through `getVariant()` in `analytics.ts` with `send_event: false`, so PostHog's own `$feature_flag_called` is never sent. Only a flag that loads within 1.5 seconds and says `control` or `test` gives the user an arm. Anyone else (no key, Do Not Track, opted out, blocked, slow network, flag missing) sees control and is never exposed, so a slow network can't quietly add people to the control arm.
 - Users with Do Not Track or Global Privacy Control on never load PostHog, so they always get control and are never exposed.
+- Demo mode is never enrolled. `?demo=1&variant=test` previews an arm locally without sending an exposure.
+
+### EXP-001: Quick Start (`exp-001`)
+
+Pre-registered in [experiments/EXP-001.md](experiments/EXP-001.md). The flag is read only on a device's first open. `experiment_exposed` fires once the flag has loaded, if the user is still on the untouched start screen: no session started, no length or goal picked. In test, that's the moment the start screen switches to the Quick Start button; in control nothing visible changes. A Quick Start session sends `session_started` with `start_method: quick_start`, `planned_minutes: 25` and `goal_set: false`. Test users keep the Quick Start screen on later visits until their first session starts.
 
 ## Privacy rules
 
@@ -86,5 +91,6 @@ Change this file in the same commit as `PLAN` in `analytics.ts`, bump the versio
 
 ### Changelog
 
+- **v3, 2026-10-30**: EXP-001. A user gets an arm only from a loaded `control` or `test` flag; before, anything short of `test` counted as control, which would have put slow-network users into the control arm. Exposure rules for `exp-001`, the demo preview, and PostHog's `$feature/<flag>` properties are written down. No events or properties changed.
 - **v2, 2026-10-30**: built on Day 2. `planned_minutes` is now `enum(15, 25, 50)`, because custom lengths were dropped. `start_method` loses `custom`. New super property `is_demo`; `variant` is now an enum. New `completed_while_away` on `session_completed`, and `page_closed` now means the user said no in the away check. The goal is chosen from chips. Weekly summary properties and `elapsed_seconds` are defined precisely. `before_send` drops unplanned events.
 - **v1, 2026-10-29**: first version, seven events.

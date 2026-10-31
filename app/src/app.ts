@@ -1,7 +1,16 @@
 import * as analytics from './analytics'
-import { GOALS, LENGTHS, isDemo, type GoalId, type SessionLength } from './config'
+import {
+  DEFAULT_LENGTH,
+  EXPERIMENT_KEY,
+  GOALS,
+  LENGTHS,
+  isDemo,
+  previewVariant,
+  type GoalId,
+  type SessionLength,
+} from './config'
 import { endsAt, focusedMs, remainingMs, type ActiveSession } from './session'
-import { loadState, saveState, type State } from './state'
+import { loadState, saveState, type Arm, type State } from './state'
 import {
   DAY_MS,
   addDays,
@@ -65,7 +74,7 @@ const ui = {
   analyticsToggle: el<HTMLButtonElement>('analytics-toggle'),
 }
 
-type Screen = keyof typeof ui.screens
+type Screen = keyof typeof ui.screens | 'quick'
 
 let unitMs = 60_000
 let storageKey = 'studysprint'
@@ -73,6 +82,12 @@ let state: State
 let selectedLength: SessionLength
 let selectedGoal: GoalId | null
 let ticker: number | undefined
+// EXP-001: this device's arm (or a demo preview), and whether the start screen has been
+// touched or "Customize" chosen on this page load.
+let arm: Arm | null = null
+let setupTouched = false
+let customized = false
+let quick: { section: HTMLElement; heading: HTMLElement } | null = null
 
 const today = () => dayKey(Date.now())
 const streakNow = () => currentStreak(state.history, today())
@@ -88,6 +103,8 @@ export function startApp(): void {
   selectedGoal = state.lastGoal
   const isFirstOpen = state.firstOpenAt === null
   state.firstOpenAt ??= Date.now()
+  const enrolled = state.experiments[EXPERIMENT_KEY] ?? null
+  arm = previewVariant(location.search) ?? enrolled
 
   ui.demoBanner.hidden = !demo
   buildSetup()
@@ -97,8 +114,8 @@ export function startApp(): void {
 
   analytics.initAnalytics({
     app_version: (import.meta.env.VITE_APP_VERSION || 'dev').slice(0, 7),
-    experiment_key: 'none',
-    variant: 'none',
+    experiment_key: enrolled ? EXPERIMENT_KEY : 'none',
+    variant: enrolled ?? 'none',
     is_demo: demo,
   })
   renderFooter()
@@ -112,6 +129,56 @@ export function startApp(): void {
   resumeActiveSession()
   if (!state.active) maybeOpenWeeklySummary()
   save()
+  if (isFirstOpen && !demo) void joinExperiment()
+}
+
+// ---- EXP-001: Quick Start --------------------------------------------------------------
+
+/**
+ * The exposure rule from docs/experiments/EXP-001.md: on a device's first open, once the flag
+ * has loaded, if the start screen is still untouched. Every check happens before the arm is
+ * known, so both arms are filtered the same way. Control sees nothing change.
+ */
+async function joinExperiment(): Promise<void> {
+  const variant = await analytics.getVariant(EXPERIMENT_KEY)
+  if (!variant || setupTouched || state.active || state.sessionsStarted > 0) return
+  arm = variant
+  state.experiments[EXPERIMENT_KEY] = variant
+  save()
+  analytics.setExperimentContext(EXPERIMENT_KEY, variant)
+  if (variant === 'test') showSetup(false)
+  analytics.trackExperimentExposed({ experiment_key: EXPERIMENT_KEY, variant })
+}
+
+/** The test arm, until the first session starts or the user asks to customize. */
+function quickStartOn(): boolean {
+  return arm === 'test' && state.sessionsStarted === 0 && !customized
+}
+
+/** Built only for the test arm, so the control page stays exactly as it was. */
+function quickScreen(): { section: HTMLElement; heading: HTMLElement } {
+  if (quick) return quick
+  const section = document.createElement('section')
+  section.id = 'screen-quick'
+  section.className = 'screen'
+  section.setAttribute('aria-labelledby', 'quick-title')
+  section.innerHTML = `
+    <h1 id="quick-title" tabindex="-1">Start a focus sprint</h1>
+    <p class="lede">One click and the timer starts. Stay with one thing for ${DEFAULT_LENGTH} minutes.</p>
+    <button id="quick-start" class="button primary quick-start" type="button">Start a ${DEFAULT_LENGTH}-minute focus</button>
+    <button id="customize" class="button quiet" type="button">Customize length or goal</button>`
+  ui.screens.setup.after(section)
+  section.querySelector('#quick-start')?.addEventListener('click', () => {
+    selectedLength = DEFAULT_LENGTH
+    selectedGoal = null
+    startSession('quick_start')
+  })
+  section.querySelector('#customize')?.addEventListener('click', () => {
+    customized = true
+    showSetup()
+  })
+  quick = { section, heading: el('quick-title') }
+  return quick
 }
 
 // ---- Setup -----------------------------------------------------------------------------
@@ -127,6 +194,7 @@ function buildSetup(): void {
       input.value = String(length)
       input.addEventListener('change', () => {
         selectedLength = length
+        setupTouched = true
         syncSetup()
       })
       const text = document.createElement('span')
@@ -144,6 +212,7 @@ function buildSetup(): void {
       chip.dataset.goal = goal.id
       chip.addEventListener('click', () => {
         selectedGoal = selectedGoal === goal.id ? null : goal.id
+        setupTouched = true
         syncSetup()
       })
       return chip
@@ -165,14 +234,16 @@ function syncSetup(): void {
 
 function showSetup(moveFocus = true): void {
   syncSetup()
-  showScreen('setup', moveFocus)
+  showScreen(quickStartOn() ? 'quick' : 'setup', moveFocus)
 }
 
 function showScreen(screen: Screen, moveFocus: boolean): void {
   for (const [name, section] of Object.entries(ui.screens)) section.hidden = name !== screen
-  ui.streakButton.hidden = screen !== 'setup'
+  const quickSection = screen === 'quick' ? quickScreen().section : quick?.section
+  if (quickSection) quickSection.hidden = screen !== 'quick'
+  ui.streakButton.hidden = screen !== 'setup' && screen !== 'quick'
   if (screen !== 'timer') stopTicker()
-  if (moveFocus) ui.headings[screen].focus()
+  if (moveFocus) (screen === 'quick' ? quickScreen().heading : ui.headings[screen]).focus()
 }
 
 // ---- Session lifecycle -----------------------------------------------------------------
@@ -187,7 +258,7 @@ function newSessionId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
 
-function startSession(): void {
+function startSession(method: 'preset' | 'quick_start' = 'preset'): void {
   if (state.active) return
   const session: ActiveSession = {
     id: newSessionId(),
@@ -207,7 +278,7 @@ function startSession(): void {
     session_id: session.id,
     planned_minutes: session.plannedMinutes,
     goal_set: session.goal !== null,
-    start_method: 'preset',
+    start_method: method,
     session_number: state.sessionsStarted,
   })
   showTimer()
@@ -475,8 +546,8 @@ function openDialog(dialog: HTMLDialogElement): void {
 }
 
 function bindEvents(): void {
-  ui.start.addEventListener('click', startSession)
-  ui.again.addEventListener('click', startSession)
+  ui.start.addEventListener('click', () => startSession())
+  ui.again.addEventListener('click', () => startSession())
   ui.doneHome.addEventListener('click', () => showSetup())
   ui.summaryButton.addEventListener('click', () => openSummary('user'))
   ui.streakButton.addEventListener('click', openStreak)
