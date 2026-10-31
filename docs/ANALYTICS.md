@@ -8,7 +8,7 @@ From `analysis/`, with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv run liftlab load --source synthetic   # simulate 20,000 users (seed 7) into data/warehouse.duckdb
-uv run liftlab build                     # build the six models in analysis/sql/
+uv run liftlab build                     # build the seven models in analysis/sql/
 uv run liftlab report                    # print the funnel, retention and North Star
 ```
 
@@ -41,6 +41,9 @@ flowchart LR
     STG --> NS["north_star_weekly"]
     FCT --> NS
     DIM --> NS
+    STG --> EXP["experiment_users"]
+    FCT --> EXP
+    DIM --> EXP
     META[("warehouse_meta<br/>where each source's data ends")] -.-> FCT
 ```
 
@@ -51,6 +54,7 @@ flowchart LR
 | `dim_users` | anonymous user | First open (day 0), acquisition week, sessions started and completed, `activated_at` (first completion within 24 hours of the first open), whether that 24-hour window has closed, and the experiment arm from `experiment_exposed`. |
 | `funnel_activation` | source × step | New users with 7 full days of data, through `app_opened` → `session_started` (24 h) → `session_completed` (24 h) → `second_session_7d`. Each step is a subset of the one before. |
 | `retention_cohorts` | source × acquisition week | D1, D7 and D28: a session started on day n exactly. A cohort's Dn stays empty until its last member's day n has ended. |
+| `experiment_users` | source × experiment × exposed user | What the readout needs: first exposure and its arm (and how many arms the user saw), whether they were new at exposure, activation, completed, abandoned and ended sessions in the 7 days after exposure, sessions in the 28 days before it (CUPED's covariate), device type and referrer at exposure, and every `load_ms` after the exposure load within 7 days. `window_7d_closed` says whether those 7 days, plus 24 hours to see how the last sessions ended, are inside the data. |
 | `north_star_weekly` | source × complete ISO week | The North Star and every input in the metric tree: WAU, sessions per active user, completion rate, new and returning users, activation rate, active days per week, streak views, weekly summary views, goal-set rate, length mix, abandon rate, p75 load time, focus minutes, concentration and event volume. |
 
 `warehouse_meta.data_end` records where each source's data stops. Every "has this period finished?" check uses it, so nothing reports a half-finished week or cohort.
@@ -146,7 +150,7 @@ The module behind it, `liftlab.stats.power`, uses only the standard library. `te
 `liftlab dry-run` checks a plan on experiments where the answer is known. Each run:
 
 1. simulates new users arriving into a 50/50 `exp-001` test with a true activation effect (the MDE by default),
-2. loads their events into an in-memory warehouse and builds the six models,
+2. loads their events into an in-memory warehouse and builds the models,
 3. reads activation from `dim_users` for exposed users, in exposure order, stopping once both arms have N, which is how the real read happens,
 4. runs the pre-registered two-proportion z-test.
 
