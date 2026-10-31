@@ -194,3 +194,115 @@ The tracking plan didn't change.
 - Pre-register the Quick Start experiment, sizing it from the 30% activation baseline.
 - Add the PostHog feature flag and the app change, firing `experiment_exposed` only where the arms differ.
 - Do a simulated readout with `Experiment(audience="new")`.
+
+## Day 4, 2026-10-30: EXP-001 pre-registered, power module, Quick Start behind a flag
+
+Numbers marked synthetic come from the simulator, not from real users.
+
+### Done
+
+- **Power module** (`analysis/src/liftlab/stats/power.py`).
+  - Sample size per arm, power and the inverse (the MDE a given N can detect), for two proportions and for a difference in means.
+  - Absolute or relative MDE, two-sided by default, plus the duration in days at a given number of eligible users a day.
+  - Standard library only. The tests check it against statsmodels, which is a dev-only dependency: sample sizes are the smallest N statsmodels says is enough, and power agrees to 1e-12. `uv run liftlab power` prints a plan.
+- **Pre-registration**, [docs/experiments/EXP-001.md](experiments/EXP-001.md). It covers:
+  - the hypothesis from backlog #1, randomized by anonymous `distinct_id`, 50/50, new users only, with an exact exposure rule;
+  - activation as the primary metric, completed sessions per user in 7 days as the secondary, and abandon rate (+2.0 points) and page-load p75 (+10%, or above 2,000 ms) as guardrails;
+  - sample size, duration and feasibility;
+  - the analysis order (SRM, primary, guardrails, secondary, CUPED, sequential monitoring);
+  - a six-step decision rule.
+- **Quick Start variant behind `exp-001`.**
+  - On a device's first open, the app reads the flag. If it loads within 1.5 s with `control` or `test`, and the start screen is still untouched, `experiment_exposed` fires once and the arm is saved and registered as super properties.
+  - The test arm switches to one "Start a 25-minute focus" button (`start_method: quick_start`, no goal), with the usual choices behind "Customize length or goal". It keeps that screen until the first session starts.
+  - In control, nothing visible changes.
+  - Demo mode is never enrolled; `?demo=1&variant=test` previews the test arm.
+- **A bug fix in `getVariant`.** Before, a slow or blocked flag returned `control`. Exposing those users would have put every ad-blocker and slow-network visitor into the control arm only, which is a built-in sample-ratio mismatch. Now it returns `null` (no arm, see control, never exposed). The tracking plan is v3 with the exposure rules; no events or properties changed.
+- **PostHog setup steps**, [docs/experiments/EXP-001-posthog-setup.md](experiments/EXP-001-posthog-setup.md), for doing it by hand: the flag, the custom exposure event with filters, a funnel primary metric with a 24-hour window, the secondary and abandon-rate metrics, frequentist statistics, and launch checks.
+- **Dry run** (`uv run liftlab dry-run`). It simulates `exp-001` experiments with a known effect, runs each one through the warehouse and SQL models, stops at N per arm the way the real read will, and applies the pre-registered z-test. The simulator's experiment key is now `exp-001`, the real flag key.
+
+### Pre-registered before the variant
+
+```
+81f2df5 docs: pre-register EXP-001 Quick Start experiment
+628f23e test(app): snapshot the start screen before EXP-001
+28fb30d feat(app): add Quick Start variant behind the exp-001 flag
+```
+
+The pre-registration was pushed on its own before any variant code existed, so GitHub has its timestamp. The start-screen snapshot was recorded from the app as it was then, and the variant commit doesn't touch it.
+
+### The plan
+
+Baseline activation 30.0% (synthetic, from Day 3's funnel: 5,069 of 16,881 new users) | MDE +5.0 points absolute (+16.7% relative) | alpha 0.05, two-sided | power 0.80
+
+**Required: 1,377 users per arm, 2,754 in total.**
+
+| Eligible new users a day | Days |
+|---|---|
+| 5 (realistic for StudySprint) | 551 |
+| 10 | 276 |
+| 40 | 69 |
+| 100 | 28 |
+
+StudySprint can't reach that. The live run is capped at 8 weeks, which at 5 users a day is about 140 per arm, enough to detect only a 16-point lift. It's there to prove the flag, exposure and tracking pipeline; the statistics are validated on the simulator here and on the Cookie Cats data on Day 6. EXP-001.md says so up front, in its feasibility section.
+
+### Dry run (synthetic)
+
+Each run simulates new users arriving into a 50/50 `exp-001` test over two weeks, builds the warehouse, reads exposed users in exposure order until both arms have 1,377, and applies the pre-registered two-sided z-test at alpha 0.05.
+
+| Runs | True effect | Detected | Expected |
+|---|---|---|---|
+| 200 at the MDE (seeds 1-200) | +5.0 points | **157, empirical power 78.5%** (95% CI 72.3% to 83.6%) | 79.6% |
+| 800 with no effect (seeds 1001-1800) | 0 | 57, false-positive rate 7.1% (5.5% to 9.1%) | 5.0% |
+| 1,600 with no effect (seeds 2001-3600) | 0 | 78, false-positive rate 4.9% (3.9% to 6.0%) | 5.0% |
+| All 2,400 with no effect | 0 | 135, false-positive rate 5.6% (4.8% to 6.6%) | 5.0% |
+
+- Expected power is 79.6%, not 80%, because the simulator's true control rate is 30.7% and the plan used 30.0%. A higher base rate has a little more variance.
+- At the MDE the mean estimated lift was +5.07 points against a true +5.0, and no run detected an effect in the wrong direction. Mean arm sizes were 1,399 and 1,400; the read stops when the smaller arm reaches 1,377, so the other one runs slightly over.
+- Run 1 (seed 1), as an example: control 419 of 1,377 = 30.4%, test 520 of 1,387 = 37.5%, a difference of +7.1 points (95% CI +3.5 to +10.6), z 3.92, p 0.0001.
+- The no-effect runs started badly. The first 200 flagged 17 (8.5%), and 800 flagged 57 (7.1%), which has about a 0.5% chance at a true 5% rate. So I looked for a bug before writing it down:
+  - The same seeds read straight from the simulator's ground truth, skipping the warehouse, give the same result: 57 detections, with the same z mean (0.00) and standard deviation (1.05). The SQL isn't the cause.
+  - With no effect, nothing in the simulator depends on the arm: the start shift is exactly 0, and the only difference is the `start_method` label.
+  - On those 800 seeds, randomly relabelling the arms gave 5.4%, and replacing the outcomes with coin flips gave 4.9%.
+  - 1,600 fresh seeds then gave 4.9%.
+
+  Seeds 1001-1800 were an unlucky block, and the test holds its 5% level. It's also why one 200-run check isn't enough to judge a false-positive rate.
+
+### Checks
+
+| Check | Result |
+|---|---|
+| `uv run pytest` | Pass, 80 tests (38 before). New: power, sample size and MDE against statsmodels for proportions and means, one- and two-sided, absolute and relative; the EXP-001 plan (1,377 per arm); duration rounding and input errors; the dry run's z-test and Wilson interval against statsmodels; a small dry run read through the warehouse; the `power` and `dry-run` commands. |
+| `ruff check`, `ruff format --check` | Clean. |
+| `npm test` | Pass, 63 tests (47 before). New: control matches the pre-experiment snapshot with no flag and with a `control` flag; the test arm switches at exposure and exposes once; no exposure if the screen was touched first, for returning visitors, or in demo mode; Quick Start sends `quick_start`, 25 min, no goal; Customize opens the normal screen; Quick Start persists until the first session; `getVariant` gives no arm for slow, missing or unknown flags; saved arms survive reloads and bad data. |
+| Control, byte for byte | The snapshot test passes in jsdom. In a real browser with a `control` flag from a mock PostHog, the rendered `<main>` is identical to the snapshot, all 3,120 characters. |
+| End to end against a mock PostHog | **Test flag:** Quick Start shows; `experiment_exposed` arrives once with `experiment_key: exp-001`, `variant: test` and `$feature/exp-001: test`; the Quick Start click sends `session_started` with `start_method: quick_start`, 25 min, `goal_set: false`, `session_number: 1`. **Control flag:** one exposure with `variant: control`, screen unchanged. **Flag 3 s late:** control screen, no exposure, nothing saved. No `$feature_flag_called` in any run. |
+| Deploy | Green: [run 41162632400](https://github.com/singha105/liftlab/actions/runs/41162632400). The live site has no PostHog key yet, so everyone sees control and nothing is sent; the demo preview shows the deployed Quick Start screen. |
+| Bundle | 16.6 kB JavaScript (6.2 kB gzipped), up from 14.9 kB (5.6 kB). |
+
+### Decisions
+
+- **Only a loaded flag enrolls anyone.** See the `getVariant` fix above. Users without a flag are absent from the analysis rather than counted as control.
+- **Exposure is checked before the arm is known.** First open, flag in time, screen untouched: each condition applies to both arms equally, so it filters them the same way. The cost is that a test user sees the normal screen for up to 1.5 s before Quick Start replaces it. Holding the screen back until the flag loads would have changed the control experience.
+- **+5 points as the MDE.** It's about the lift the backlog's impact score assumed. +3 points would need 3,763 per arm. A true lift of 2 or 3 points will most likely end as ITERATE.
+- **The secondary counts completed sessions, not started ones.** Quick Start raises starts by design; completed sessions are the North Star counted per user.
+- **Guardrails are judged on the point estimate.** With about 2 ended sessions per user in the first week, the abandon-rate difference has a standard error of about 1.4 points (delta method, synthetic), so a +2.0-point threshold will raise a false alarm about 8% of the time when nothing has changed. That's accepted, because more abandoned sessions is this test's main risk.
+- **CUPED doesn't apply to EXP-001.** New users have no pre-experiment behavior to adjust with. Day 5 validates CUPED on the simulator's returning-user experiments; EXP-001 gets a regression-adjusted sensitivity check on device type and referrer only.
+- **No PostHog release conditions.** StudySprint never creates person profiles, so there's nothing to target "new users" on. The app enforces it by reading the flag only on a first open.
+- **The simulator's Quick Start sprints keep the usual length mix**, while the app's are always 25 minutes with no goal. The activation effect is set directly, so the dry run's ground truth doesn't depend on it.
+
+### Open
+
+- **PostHog by hand** (EXP-001-posthog-setup.md): the `phc_` key as the `VITE_POSTHOG_KEY` repository variable plus a deploy rerun, "Discard client IP data", then create and launch the experiment. Record the launch date here; the 8-week limit runs from it.
+- The personal API key and project ID in `.env` for `liftlab export-posthog`, which is needed to analyze the live run.
+
+### Next: Day 5
+
+The stats library:
+- an SRM check;
+- the z-test and Welch test with confidence intervals;
+- the delta method for ratio guardrails like abandon rate;
+- a bootstrap for the p75 load time;
+- CUPED, validated on the simulator's returning-user experiments;
+- a sequential test for the weekly guardrail checks.
+
+Then a full simulated EXP-001 readout through the pre-registered decision rule.
