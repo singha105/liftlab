@@ -102,7 +102,7 @@ Pass an `Experiment` to simulate a test, which Day 5's statistics library is che
 from liftlab.simulate import Experiment, simulate
 
 sim = simulate(20_000, seed=11, experiment=Experiment(
-    key="quick-start", start_day=21,
+    key="exp-001", start_day=21,
     activation_effect=0.05,   # +5 points of activation for new users in the test arm
     sessions_effect=0.2,      # +20% visits after exposure
     srm_loss=0.1,             # 10% of test exposures never logged
@@ -116,7 +116,7 @@ sim.users                     # variant, exposed_at, exposure_logged, pre_sessio
 - **Sessions effect.** This multiplies a test user's daily visit chance after their exposure day. For returning users, expected sessions on every later day therefore scale by exactly 1 + the effect.
 - **CUPED covariate.** `pre_sessions`, the number of sessions started in the 28 days before exposure, is the pre-period covariate. It's 0 for new users.
 - **Sample-ratio mismatch.** `srm_loss` drops a share of test-arm exposure events. Those users still get the test experience.
-- **Quick Start.** With the `quick-start` key, a new test user's first sprint has `start_method: quick_start`.
+- **Quick Start.** With the `exp-001` key (the default, pre-registered in [EXP-001](experiments/EXP-001.md)), a new test user's first sprint has `start_method: quick_start`. Its length and goal still follow the usual first-sprint mix, while the app's Quick Start is always 25 minutes with no goal. The activation effect is set directly, so this doesn't change the ground truth.
 
 The weekly North Star truth is only computed without an experiment.
 
@@ -127,6 +127,35 @@ The weekly North Star truth is only computed without an experiment.
 - A visit on the day after arrival starts at least 24 hours after the first open, so it never counts toward activation.
 - There are no bots, and no ad-blocked or Do-Not-Track users. Those users send nothing in real life, so they'd be missing rather than wrong.
 - The baselines are assumptions, which is the main limitation. The simulator can show that the SQL measures what it should. It can't show that real students behave like this.
+
+## Planning an experiment
+
+`liftlab power` sizes a two-arm test from a baseline and an MDE, absolute or `--relative`. Give it `--n` instead of `--mde` to get the smallest effect a sample can detect, or `--sd` to plan a difference in means instead of proportions:
+
+```
+$ uv run liftlab power --baseline 0.30 --mde 0.05 --daily 5 10 40
+Baseline activation 30.0% | MDE +5.0pp absolute (+16.7% relative) | alpha 0.05 | power 0.80 | two-sided
+Required: 1,377 users per arm (2,754 total)
+  at 5 new users/day: 551 days
+  at 10 new users/day: 276 days
+  at 40 new users/day: 69 days
+```
+
+The module behind it, `liftlab.stats.power`, uses only the standard library. `tests/test_power.py` checks it against statsmodels (`power_proportions_2indep`, `NormalIndPower`, `TTestIndPower`), which is a test-only dependency.
+
+`liftlab dry-run` checks a plan on experiments where the answer is known. Each run:
+
+1. simulates new users arriving into a 50/50 `exp-001` test with a true activation effect (the MDE by default),
+2. loads their events into an in-memory warehouse and builds the six models,
+3. reads activation from `dim_users` for exposed users, in exposure order, stopping once both arms have N, which is how the real read happens,
+4. runs the pre-registered two-proportion z-test.
+
+The share of runs that detect the effect is the empirical power. `--effect 0` gives the false-positive rate instead, and `--first-seed` moves to a fresh block of seeds. For EXP-001 (synthetic):
+
+- At the MDE, 157 of 200 runs detected the effect: 78.5% (95% CI 72.3% to 83.6%), against an expected 79.6% at the simulator's true control rate of 30.7%.
+- With no effect, 135 of 2,400 runs flagged one: 5.6% (95% CI 4.8% to 6.6%), against 5%.
+
+The first 800 no-effect runs came out at 7.1% on their own. That turned out to be chance; the Day 4 entry in [PROGRESS.md](PROGRESS.md) shows how it was checked.
 
 ## Three example questions
 

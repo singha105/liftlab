@@ -14,7 +14,8 @@ StudySprint sends anonymous usage analytics only: no account, no names or emails
 liftlab/
 ├── app/            StudySprint: Vite + TypeScript, deployed to GitHub Pages
 ├── analysis/       Python package `liftlab`: simulator, DuckDB warehouse, stats library, tests
-│   └── sql/        the six SQL models, built in order by `liftlab build`
+│   ├── sql/        the six SQL models, built in order by `liftlab build`
+│   └── src/liftlab/stats/   power analysis now, experiment analysis on Day 5
 ├── data/           local only, gitignored: raw downloads, event exports, DuckDB files
 │   └── raw/
 ├── docs/
@@ -23,6 +24,7 @@ liftlab/
 │   ├── TRACKING_PLAN.md       every event, its properties, privacy rules
 │   ├── EXPERIMENT_BACKLOG.md  ICE-ranked hypotheses
 │   ├── ANALYTICS.md           the warehouse, the models, the simulator and its ground truth
+│   ├── experiments/           pre-registrations and PostHog setup, one per experiment
 │   ├── decisions/             decision records
 │   └── PROGRESS.md            day-by-day log
 ├── .github/workflows/
@@ -58,9 +60,21 @@ cd analysis && uv run pytest
 
 The numbers it prints are **synthetic**: simulated users with known ground truth, used to check that the SQL measures what it should. [ANALYTICS.md](docs/ANALYTICS.md) explains the models, the simulator and how to pull real events from PostHog.
 
+Planning an experiment, and checking the plan against simulated experiments with a known effect:
+
+```bash
+cd analysis && uv run liftlab power --baseline 0.30 --mde 0.05 --daily 5 10 40
+```
+
+```bash
+cd analysis && uv run liftlab dry-run --reps 200
+```
+
+The running experiment is [EXP-001, Quick Start](docs/experiments/EXP-001.md), behind the PostHog flag `exp-001`. To see its test arm without being enrolled, open [`?demo=1&variant=test`](https://singha105.github.io/liftlab/?demo=1&variant=test) in a private window.
+
 ## Status
 
-Day 3 of 7: the warehouse, SQL models and simulator are in, checked against ground truth. See [docs/PROGRESS.md](docs/PROGRESS.md).
+Day 4 of 7: EXP-001 is pre-registered and its Quick Start variant is deployed behind a feature flag, waiting on the PostHog key. See [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## License
 
