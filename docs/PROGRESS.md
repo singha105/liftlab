@@ -306,3 +306,103 @@ The stats library:
 - a sequential test for the weekly guardrail checks.
 
 Then a full simulated EXP-001 readout through the pre-registered decision rule.
+
+## Day 5, 2026-10-31: stats library, readout, weekly checks, simulation proofs
+
+Every number in this entry is **synthetic**: simulated users with known ground truth, not real usage.
+
+### Done
+
+- **The stats library** (`analysis/src/liftlab/stats/`), one module per job:
+  - `srm.py`: chi-square sample ratio mismatch check, flagging at p < 0.001.
+  - `tests.py`: the two-proportion z-test, Welch's t-test and the delta method for ratio metrics, each with an absolute and a relative lift and 95% intervals. Day 4's dry run now uses this z-test.
+  - `bootstrap.py`: a vectorized, seedable percentile bootstrap that resamples users, not values.
+  - `cuped.py`: CUPED and regression adjustment, with the variance reduction.
+  - `sequential.py`: the mSPRT from Johari, Pekelis and Walsh, with always-valid p-values and confidence sequences, and the mixing parameter from their equation 12.
+  - `multiple.py`: Holm's step-down correction.
+- **`experiment_users`**, the seventh SQL model: one row per exposed user with what the readout needs, from the arm and first exposure to 7-day sessions, the 28-day pre-period and page loads after exposure.
+- **`liftlab readout`** runs EXP-001's plan from [EXP-001.yaml](experiments/EXP-001.yaml): SRM, then the primary with and without its adjustment, the guardrails, the secondaries with Holm, and the decision rule. It prints SHIP, ITERATE or KILL (or INVALID or UNDERPOWERED) with the reason for every rule it checked, as Markdown or JSON.
+- **`liftlab monitor`** runs the weekly checks from step 6 of the analysis plan: SRM on everyone exposed so far, and an mSPRT confidence sequence for each guardrail.
+- **Amendment 1 to EXP-001**, dated today and before launch. Step 6 said the weekly guardrail checks would use the sequential test without saying how. The amendment says how: a look every 7 days, guardrails on users whose 7-day window has closed, each guardrail's threshold as its mixing sd, and an early stop only if a guardrail's always-valid interval lies entirely past its threshold. The primary metric, the read and the decision rule are unchanged.
+- **`liftlab proofs`**: five simulation proofs, run through the simulator and the warehouse, with charts in `docs/img/` (light and dark) and the numbers in `docs/img/stats-proofs.json`.
+- **[docs/STATS.md](STATS.md)**: every method in two plain sentences, when to use it, its formula, what checks it, and its simulation result.
+
+### Simulation proofs (synthetic)
+
+**A/A false-positive rate: 5.8% | Peeking daily, naive: 27.3% vs mSPRT: 1.7% | CUPED variance reduction: 22%**
+
+From `uv run liftlab proofs`, which took 58 minutes on 8 cores. The charts and what each method is are in [STATS.md](STATS.md); the numbers are in [img/stats-proofs.json](img/stats-proofs.json).
+
+| Proof | Result | Should be |
+|---|---|---|
+| A/A: 1,000 experiments with no effect, read once at 1,377 per arm (seeds 10,001 on) | 58 significant: **5.8%** (95% CI 4.5% to 7.4%). p-values close to flat, 37 to 65 per bin against 50. | 5% |
+| Peeking: 1,000 A/A experiments of new users, a look a day for 28 days, about 1,366 per arm by the last | Fixed-horizon z-test, stopping at the first p < 0.05: **27.3%** (24.6% to 30.1%). mSPRT: **1.7%** (1.1% to 2.7%), none in the first week. The z-test read once, at the last look: 4.9%. | mSPRT at most 5% |
+| CUPED: 1,000 A/A experiments on all users, about 2,380 each, 28-day pre-period | Variance **−22%** across experiments (−21% as each readout reported), intervals 11% narrower, coverage 95.6% (95.3% unadjusted). Returning users alone: −8%. | coverage 95% |
+| SRM: 300 experiments per size and split | 52/48 flagged in **16%** at 2,743 users, 75% at 9,960, 99% at 19,920. 50/50: 0 of 300 at each size. | 12%, 76%, 99% (theory); 0.1% |
+| Power: 1,000 experiments with a true +5.0 points, 1,377 per arm | 818 detected: **81.8%** (79.3% to 84.1%). Mean estimate +5.14 points. | 79.6% |
+
+### Example readout (synthetic)
+
+One simulated EXP-001 (seed 4, 3,581 users over two weeks, a true activation effect of +5.0 points), read with `liftlab readout`:
+
+```
+# EXP-001 Quick Start: SHIP
+
+**SYNTHETIC: simulated users with known ground truth, not real usage**
+
+- **SRM**: p = 0.80 (ok) | users 1,377 control / 1,390 test
+- **Primary, Activation rate**: 28.5% → 38.4% | +9.9pp [+6.5pp, +13.4pp] (+35.0% relative) | p < 0.0001
+  - Regression-adjusted for device type and referrer (sensitivity only): +9.8pp [+6.3pp, +13.3pp], variance ±0%
+- **Guardrail, Abandon rate**: 31.4% → 31.0% | -0.3pp [-3.2pp, +2.6pp] (threshold +2.0pp) ok
+- **Guardrail, Page load p75**: 671 → 682 ms | +1.6% [-4.8%, +7.9%] (threshold +10% or 2,000 ms) ok
+- **Secondary, Completed sessions per user in 7 days**: 1.19 → 1.52 | +0.33 [+0.17, +0.49] (+28.0% relative) | p < 0.0001, Holm-adjusted p < 0.0001
+
+**Decision: SHIP**
+
+- Not INVALID: no sample ratio mismatch (p = 0.80)
+- Not UNDERPOWERED: both arms reached 1,377 users
+- Not KILL: no guardrail regressed beyond its threshold
+- Activation rate CI [+6.5pp, +13.4pp] is entirely above 0
+- No secondary metric is significantly worse
+
+*SYNTHETIC: simulated users with known ground truth, not real usage*
+```
+
+The estimate came out at +9.9 points against a true +5.0, and its interval misses the truth. That's one draw. Over 40 seeds of the same setup the readout's mean estimate was +5.12 points (standard error 0.33) and 36 of 40 intervals covered +5.0, so the readout path isn't biased.
+
+### Checks
+
+| Check | Result |
+|---|---|
+| `uv run pytest` | Pass, 167 tests (80 before) in 42 s. New: SRM against a textbook value and scipy; the z-test against statsmodels, with A/A size and coverage; Welch against scipy; the delta method by hand, against Welch, and its coverage on clustered sessions; Holm against statsmodels and its family-wise error; the bootstrap against scipy, its coverage and its user-level resampling; CUPED against statsmodels OLS, with its bias, coverage and variance reduction; the mSPRT by hand, against numerical integration, under continuous monitoring, and the |z| ≥ 3.04 it needs to reject; every branch of the decision rule; `experiment_users` against the simulator's truth; the weekly checks (stops for SRM, a large regression and both page-load limits, not for one just past the threshold, and the bounds equal the mSPRT of each week's estimate); and each proof at a few runs, with its charts. |
+| `ruff check`, `ruff format --check` | Clean. |
+| Proofs reproduce | A second run of the peeking and power proofs (after a chart label fix) gave exactly the same numbers: the seeds are fixed. |
+| Charts | All ten PNGs looked at in both themes. The palette passes the dataviz validator's checks in light and dark. |
+
+### Decisions
+
+- **CUPED's θ is pooled within arms.** That makes the estimate exactly the arm coefficient of the regression y ~ arm + x, which statsmodels can check, and lets the same code do regression adjustment with several covariates.
+- **The mSPRT's mixing sd for EXP-001's primary is 0.0620**, from equation 12 with τ = the 5-point MDE and M = the planned 1,377 per arm. For the guardrails it's their threshold (Amendment 1).
+- **Weekly guardrail checks stop only on an always-valid interval past the threshold.** Using the point estimate every week would mean about 8 chances to cross +2.0 points by luck, against the one chance the read gets. At the read, the point estimate still decides, as pre-registered.
+- **The bootstrap resamples users, each with all their page loads.** Users were randomized, and one user's loads move together.
+- **Holm runs even with one secondary**, where it changes nothing, so a second secondary can't be added without it.
+- **The relative-lift interval uses the delta method**, not Fieller's. Every control here is far from zero, where the two agree.
+- **The A/A and power proofs reuse Day 4's dry run**, which reads activation from `dim_users`. The peeking, CUPED and SRM proofs read `experiment_users`. The 40-seed check above covers the readout's own path.
+
+### Worth knowing
+
+- **EXP-001's SRM check is weak at its own N.** At 2,754 users it catches a 52/48 split only about 12% of the time; catching it 80% of the time takes about 10,700 users. At EXP-001's N it's reliable only for about 54/46 or worse, and in the live run (about 140 users per arm) for about 62/38 or worse. The proof agrees with the theory at 10,000 and 20,000 users; its 16% at 2,743 is 2.2 standard errors high, most likely chance.
+- **CUPED's gain on the simulator is modest**: 22% for all users and 8% for returning users alone, which matches the correlations (about 0.46 and 0.29). A returning user's last month predicts their next week only weakly in the simulator, and part of the 22% is just the covariate telling new users from returning ones. Real data with more history usually does better, but that's not shown here.
+- **EXP-001's regression adjustment on device type and referrer removes almost no variance** in the simulator, because the simulator doesn't make activation depend on either. On real users it might.
+- **The weekly guardrail checks can only stop large regressions.** Six simulated weeks of EXP-001 left the abandon-rate interval at about ±3.5 points, so an early stop needs a true regression of about +5.5 points or more. Smaller ones wait for the read, as the amendment intends.
+- **mSPRT is conservative with daily looks**: 1.7% against a 5% bound, because the bound holds for any number of looks. The price is power. It's used for monitoring, never for EXP-001's primary.
+
+### Open
+
+- **PostHog by hand**, still: the `phc_` key as the `VITE_POSTHOG_KEY` repository variable plus a deploy rerun, "Discard client IP data", then create and launch the experiment. Set `launch:` in EXP-001.yaml on launch day.
+- The personal API key and project ID in `.env` for `liftlab export-posthog`.
+- The Cookie Cats CSV for Day 6.
+
+### Next: Day 6
+
+Re-analyze the public Cookie Cats A/B test (about 90,000 players) with the same library: SRM, 1-day and 7-day retention with z-tests and bootstrap intervals, and a readout with a decision. It's the library's first real data.
