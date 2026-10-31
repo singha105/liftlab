@@ -167,6 +167,18 @@ def test_confidence_sequence_edges_sit_on_the_threshold():
         assert log_likelihood_ratio(0.04, 0.0002, 0.05, theta0=edge) == pytest.approx(math.log(20))
 
 
+def test_rejecting_needs_a_larger_z_than_the_fixed_test():
+    # 1/Lambda = alpha at z^2 = (1 + r)/r * (log(1 + r) - 2 log alpha), r = mixing_sd^2 / V.
+    # Its minimum over every mixing sd is |z| = 3.04 at alpha 0.05, so an mSPRT rejection is
+    # always a fixed-horizon rejection at the same look too.
+    r = np.logspace(-6, 6, 20_001)
+    z = np.sqrt((1 + r) / r * (np.log1p(r) - 2 * math.log(0.05)))
+    assert z.min() == pytest.approx(3.035, abs=1e-3)
+    best = math.sqrt(r[z.argmin()])
+    assert log_likelihood_ratio(z.min(), 1.0, best) == pytest.approx(math.log(20))
+    assert log_likelihood_ratio(2.99, 1.0, best) < math.log(20)
+
+
 def test_p_values_never_rise_and_intervals_only_shrink():
     rng = np.random.default_rng(13)
     n = np.arange(1, 301) * 20

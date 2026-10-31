@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import UTC, datetime, timedelta
@@ -9,12 +10,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from liftlab import dryrun, monitor, posthog_export, readout, warehouse
+from liftlab import dryrun, monitor, posthog_export, proofs, readout, warehouse
 from liftlab.simulate import Experiment, simulate
 from liftlab.stats import power as pw
 
 POSTHOG_EXPORT = warehouse.REPO_DIR / "data" / "raw" / "posthog_events.jsonl"
 EXP_001_CONFIG = warehouse.REPO_DIR / "docs" / "experiments" / "EXP-001.yaml"
+DOCS_IMG = warehouse.REPO_DIR / "docs" / "img"
+PROOFS = ("aa", "peeking", "cuped", "srm", "power")
 SYNTHETIC_LABEL = "SYNTHETIC: simulated users with known ground truth, not real usage"
 
 
@@ -78,6 +81,13 @@ def main(argv: list[str] | None = None) -> int:
     watch.add_argument("--format", choices=("markdown", "json"), default="markdown")
     watch.add_argument("--as-of", help="look up to this time (default: the source's data end)")
 
+    proof = commands.add_parser("proofs", help="check the stats library on simulated experiments")
+    proof.add_argument("--runs", type=int, default=1000, help="experiments per proof")
+    proof.add_argument("--srm-runs", type=int, default=300, help="per size and split")
+    proof.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+    proof.add_argument("--only", nargs="+", choices=PROOFS, help="run just these proofs")
+    proof.add_argument("--out", type=Path, default=DOCS_IMG, help="charts and stats-proofs.json")
+
     args = parser.parse_args(argv)
     if args.command == "export-posthog":
         return _export(args)
@@ -85,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         return _power(args)
     if args.command == "dry-run":
         return _dry_run(args)
+    if args.command == "proofs":
+        return _proofs(args)
     con = warehouse.connect(args.db)
     if args.command == "load":
         return _load(con, args)
@@ -318,6 +330,49 @@ def _dry_run(args) -> int:
         f"  mean difference {mean_diff * 100:+.2f}pp{wrong}, "
         f"mean arm sizes {mean_c:,.0f} / {mean_t:,.0f}"
     )
+    print(f"\n{SYNTHETIC_LABEL}")
+    return 0
+
+
+def _proofs(args) -> int:
+    from liftlab import proof_charts  # matplotlib is a dev dependency
+
+    print(SYNTHETIC_LABEL)
+    started = time.perf_counter()
+    results = proofs.run_all(args.runs, args.srm_runs, workers=args.workers, only=args.only)
+    elapsed = time.perf_counter() - started
+    for path in proof_charts.save_all(results, args.out):
+        print(f"wrote {path}")
+
+    summary_path = args.out / "stats-proofs.json"
+    summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+    for name, values in proofs.as_dict(results).items():
+        # The per-run lists are in the charts; the file keeps the numbers.
+        summary[name] = {k: v for k, v in values.items() if not isinstance(v, list) or len(v) <= 50}
+    summary["label"] = SYNTHETIC_LABEL
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n")
+    print(f"wrote {summary_path} ({elapsed:.0f}s)\n")
+
+    lines = []
+    if "aa" in results:
+        lines.append(f"A/A false-positive rate: {results['aa'].rate:.1%}")
+    if "peeking" in results:
+        p = results["peeking"]
+        lines.append(f"Peeking daily, naive: {p.naive_rate:.1%} vs mSPRT: {p.msprt_rate:.1%}")
+    if "cuped" in results:
+        lines.append(
+            f"CUPED variance reduction: {results['cuped'].empirical_variance_reduction:.0%}"
+        )
+    if "srm" in results:
+        s = results["srm"]
+        lines.append(
+            "SRM flags 52/48: "
+            + ", ".join(f"{f:.0%} at {n:,}" for f, n in zip(s.flagged["52%"], s.sizes, strict=True))
+            + f"; 50/50: {max(s.flagged['50%']):.1%} at most"
+        )
+    if "power" in results:
+        lines.append(f"Power at the MDE: {results['power'].rate:.1%}")
+    print(" | ".join(lines))
     print(f"\n{SYNTHETIC_LABEL}")
     return 0
 
