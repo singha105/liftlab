@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from liftlab import dryrun, posthog_export, readout, warehouse
+from liftlab import dryrun, monitor, posthog_export, readout, warehouse
 from liftlab.simulate import Experiment, simulate
 from liftlab.stats import power as pw
 
@@ -72,6 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--format", choices=("markdown", "json"), default="markdown")
     read.add_argument("--out", type=Path, help="write the readout here instead of printing it")
 
+    watch = commands.add_parser("monitor", help="an experiment's weekly SRM and guardrail checks")
+    watch.add_argument("--config", type=Path, default=EXP_001_CONFIG, help="experiment YAML")
+    watch.add_argument("--source", choices=warehouse.SOURCES, default="posthog")
+    watch.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    watch.add_argument("--as-of", help="look up to this time (default: the source's data end)")
+
     args = parser.parse_args(argv)
     if args.command == "export-posthog":
         return _export(args)
@@ -84,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
         return _load(con, args)
     if args.command == "readout":
         return _readout(con, args)
+    if args.command == "monitor":
+        return _monitor(con, args)
     if args.command == "build":
         started = time.perf_counter()
         built = warehouse.build(con)
@@ -328,6 +336,23 @@ def _readout(con, args) -> int:
         print(f"{result.decision}: wrote {args.out}")
     else:
         print(text, end="")
+    return 0
+
+
+def _monitor(con, args) -> int:
+    config = readout.load_config(args.config)
+    users = readout.experiment_users(con, config["key"], args.source)
+    if users.empty:
+        print(f"No users exposed to {config['key']} in the {args.source} data.", file=sys.stderr)
+        return 1
+    if args.as_of:
+        as_of = warehouse._naive_utc(datetime.fromisoformat(args.as_of))
+    else:
+        (as_of,) = con.execute(
+            "select data_end from warehouse_meta where source = ?", [args.source]
+        ).fetchone()
+    result = monitor.weekly_checks(users, config, as_of)
+    print(result.to_markdown() if args.format == "markdown" else result.to_json() + "\n", end="")
     return 0
 
 

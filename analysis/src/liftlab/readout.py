@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from liftlab.stats.bootstrap import bootstrap_ci
+from liftlab.stats.bootstrap import BootstrapResult, bootstrap_ci
 from liftlab.stats.cuped import CupedResult, cuped
 from liftlab.stats.multiple import holm
 from liftlab.stats.srm import SRMResult, srm_check
@@ -285,20 +285,7 @@ def _guardrail(users: pd.DataFrame, arm: np.ndarray, g: dict, alpha: float) -> G
             "not enough page loads in one arm to measure",
         )
 
-    def relative(c: np.ndarray, t: np.ndarray) -> np.ndarray:
-        def per_resample(rows):
-            return np.nanquantile(rows.reshape(len(rows), -1), q, axis=1)
-
-        return per_resample(t) / per_resample(c) - 1
-
-    boot = bootstrap_ci(
-        relative,
-        control_rows,
-        test_rows,
-        n_resamples=BOOTSTRAP_RESAMPLES,
-        level=1 - alpha,
-        seed=0,
-    )
+    boot = quantile_change(control_rows, test_rows, q, level=1 - alpha)
     control_q = float(np.nanquantile(control_rows, q))
     test_q = float(np.nanquantile(test_rows, q))
     over_relative = boot.estimate > g["max_relative_increase"]
@@ -317,6 +304,31 @@ def _guardrail(users: pd.DataFrame, arm: np.ndarray, g: dict, alpha: float) -> G
         regressed=bool(over_relative or over_value),
         detail=detail,
     )
+
+
+def quantile_change(
+    control_rows: np.ndarray, test_rows: np.ndarray, q: float, *, level: float = 0.95
+) -> BootstrapResult:
+    """Relative change in a quantile, test / control - 1, bootstrapping users, not values."""
+
+    def relative(c: np.ndarray, t: np.ndarray) -> np.ndarray:
+        return _row_quantile(t, q) / _row_quantile(c, q) - 1
+
+    return bootstrap_ci(
+        relative, control_rows, test_rows, n_resamples=BOOTSTRAP_RESAMPLES, level=level, seed=0
+    )
+
+
+def quantile_level(rows: np.ndarray, q: float, *, level: float = 0.95) -> BootstrapResult:
+    """One arm's quantile, bootstrapping users."""
+    return bootstrap_ci(
+        lambda r: _row_quantile(r, q), rows, n_resamples=BOOTSTRAP_RESAMPLES, level=level, seed=0
+    )
+
+
+def _row_quantile(resamples: np.ndarray, q: float) -> np.ndarray:
+    """The quantile of every value in each resample of padded user rows."""
+    return np.nanquantile(resamples.reshape(len(resamples), -1), q, axis=1)
 
 
 def _padded(column: pd.Series) -> np.ndarray:
