@@ -1,4 +1,4 @@
-"""`liftlab`: load events into the warehouse, build the SQL models, print the reports."""
+"""`liftlab`: load events, build the SQL models, print the reports, plan experiments."""
 
 import argparse
 import json
@@ -11,6 +11,7 @@ import pandas as pd
 
 from liftlab import posthog_export, warehouse
 from liftlab.simulate import Experiment, simulate
+from liftlab.stats import power as pw
 
 POSTHOG_EXPORT = warehouse.REPO_DIR / "data" / "raw" / "posthog_events.jsonl"
 SYNTHETIC_LABEL = "SYNTHETIC: simulated users with known ground truth, not real usage"
@@ -43,9 +44,23 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--since", default="2026-10-29", help="start date (UTC)")
     export.add_argument("--out", type=Path, default=POSTHOG_EXPORT)
 
+    plan = commands.add_parser("power", help="sample size, MDE and duration for a two-arm test")
+    plan.add_argument("--baseline", type=float, required=True, help="control rate, or mean")
+    plan.add_argument("--sd", type=float, help="per-user standard deviation: a test of means")
+    plan.add_argument("--mde", type=float, help="change to detect (absolute unless --relative)")
+    plan.add_argument("--n", type=int, help="users per arm: print the MDE they can detect")
+    plan.add_argument("--relative", action="store_true", help="--mde is a share of baseline")
+    plan.add_argument("--alpha", type=float, default=0.05)
+    plan.add_argument("--power", type=float, default=0.80)
+    plan.add_argument("--alternative", choices=pw.ALTERNATIVES, default="two-sided")
+    plan.add_argument("--daily", type=float, nargs="+", default=[5, 10, 40], help="new users/day")
+    plan.add_argument("--metric", default="activation", help="label for the output")
+
     args = parser.parse_args(argv)
     if args.command == "export-posthog":
         return _export(args)
+    if args.command == "power":
+        return _power(args)
     con = warehouse.connect(args.db)
     if args.command == "load":
         return _load(con, args)
@@ -178,6 +193,48 @@ def _export(args) -> int:
         print(f"export failed: {error}", file=sys.stderr)
         return 1
     print(f"exported {count:,} events to {args.out}")
+    return 0
+
+
+def _power(args) -> int:
+    if (args.mde is None) == (args.n is None):
+        print("give exactly one of --mde and --n", file=sys.stderr)
+        return 1
+    means = args.sd is not None
+    options = {"alpha": args.alpha, "power": args.power, "alternative": args.alternative}
+    try:
+        if args.n is not None:
+            n = args.n
+            mde = (
+                pw.mde_means(args.baseline, args.sd, n, **options)
+                if means
+                else pw.mde_proportions(args.baseline, n, **options)
+            )
+        else:
+            mde = args.mde * args.baseline if args.relative else args.mde
+            n = (
+                pw.sample_size_means(args.baseline, args.sd, mde, **options)
+                if means
+                else pw.sample_size_proportions(args.baseline, mde, **options)
+            )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+
+    if means:
+        baseline = f"{args.baseline:.3g} (sd {args.sd:.3g})"
+        change = f"{mde:+.3g} absolute"
+    else:
+        baseline = f"{args.baseline:.1%}"
+        change = f"{mde * 100:+.1f}pp absolute"
+    print(
+        f"Baseline {args.metric} {baseline} | MDE {change} ({mde / args.baseline:+.1%} relative)"
+        f" | alpha {args.alpha:g} | power {args.power:.2f} | {args.alternative}"
+    )
+    verb = "Required" if args.n is None else "Planned"
+    print(f"{verb}: {n:,} users per arm ({2 * n:,} total)")
+    for daily in args.daily:
+        print(f"  at {daily:g} new users/day: {pw.duration_days(n, daily):,} days")
     return 0
 
 

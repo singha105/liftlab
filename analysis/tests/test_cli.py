@@ -39,3 +39,14 @@ def test_loading_a_source_replaces_only_that_source(tmp_path):
     assert counts["synthetic"] > 1000
     stamp = con.execute("select timestamp::varchar from raw_events where source = 'csv'").fetchone()
     assert stamp == ("2026-10-29 14:00:00",)  # stored in UTC
+
+
+def test_power_prints_the_plan(capsys):
+    assert cli.main(["power", "--baseline", "0.30", "--mde", "0.05", "--daily", "10"]) == 0
+    out = capsys.readouterr().out
+    assert "MDE +5.0pp absolute (+16.7% relative)" in out
+    assert "Required: 1,377 users per arm (2,754 total)" in out
+    assert "at 10 new users/day: 276 days" in out
+    assert cli.main(["power", "--baseline", "0.30", "--n", "1377"]) == 0
+    assert "MDE +5.0pp" in capsys.readouterr().out
+    assert cli.main(["power", "--baseline", "0.30"]) == 1
