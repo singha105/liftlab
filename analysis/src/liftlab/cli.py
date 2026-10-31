@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from liftlab import posthog_export, warehouse
+from liftlab import dryrun, posthog_export, warehouse
 from liftlab.simulate import Experiment, simulate
 from liftlab.stats import power as pw
 
@@ -56,11 +56,22 @@ def main(argv: list[str] | None = None) -> int:
     plan.add_argument("--daily", type=float, nargs="+", default=[5, 10, 40], help="new users/day")
     plan.add_argument("--metric", default="activation", help="label for the output")
 
+    dry = commands.add_parser("dry-run", help="run EXP-001's test on simulated experiments")
+    dry.add_argument("--reps", type=int, default=200)
+    dry.add_argument("--effect", type=float, help="true activation effect (default: the MDE)")
+    dry.add_argument("--baseline", type=float, default=0.30, help="planning baseline")
+    dry.add_argument("--mde", type=float, default=0.05, help="planning MDE, absolute")
+    dry.add_argument("--alpha", type=float, default=0.05)
+    dry.add_argument("--power", type=float, default=0.80)
+    dry.add_argument("--first-seed", type=int, default=1)
+
     args = parser.parse_args(argv)
     if args.command == "export-posthog":
         return _export(args)
     if args.command == "power":
         return _power(args)
+    if args.command == "dry-run":
+        return _dry_run(args)
     con = warehouse.connect(args.db)
     if args.command == "load":
         return _load(con, args)
@@ -235,6 +246,62 @@ def _power(args) -> int:
     print(f"{verb}: {n:,} users per arm ({2 * n:,} total)")
     for daily in args.daily:
         print(f"  at {daily:g} new users/day: {pw.duration_days(n, daily):,} days")
+    return 0
+
+
+def _dry_run(args) -> int:
+    n = pw.sample_size_proportions(args.baseline, args.mde, alpha=args.alpha, power=args.power)
+    effect = args.mde if args.effect is None else args.effect
+    print(SYNTHETIC_LABEL)
+    print(
+        f"EXP-001 dry run: N = {n:,} per arm (baseline {args.baseline:.1%}, MDE "
+        f"{args.mde * 100:+.1f}pp, alpha {args.alpha:g}, power {args.power:.2f})"
+    )
+
+    def progress(done: int) -> None:
+        if done % 25 == 0:
+            print(f"  {done}/{args.reps} runs", file=sys.stderr)
+
+    started = time.perf_counter()
+    check = dryrun.empirical_power(
+        args.reps, n, effect, alpha=args.alpha, first_seed=args.first_seed, progress=progress
+    )
+    elapsed = time.perf_counter() - started
+    first = check.runs[0]
+    expected = (
+        pw.power_proportions(first.true_control, effect, n, alpha=args.alpha)
+        if effect
+        else args.alpha
+    )
+    rate = "power" if effect else "false-positive rate"
+    print(
+        f"True effect {effect * 100:+.1f}pp on a true control rate of {first.true_control:.1%}; "
+        f"expected {rate} {expected:.1%}"
+    )
+
+    r = first.result
+    print(
+        f"\nRun 1 (seed {first.seed}): control {r.rate_control * r.n_control:,.0f}/{r.n_control:,}"
+        f" = {r.rate_control:.1%} | test {r.rate_test * r.n_test:,.0f}/{r.n_test:,}"
+        f" = {r.rate_test:.1%} | diff {r.diff * 100:+.1f}pp (95% CI {r.ci_low * 100:+.1f} to"
+        f" {r.ci_high * 100:+.1f}) | z {r.z:.2f}, p {r.p_value:.4f}"
+        f" | {'detected' if first.detected else 'not detected'}"
+    )
+    low, high = check.power_ci()
+    mean_diff = sum(run.result.diff for run in check.runs) / check.reps
+    mean_c = sum(run.result.n_control for run in check.runs) / check.reps
+    mean_t = sum(run.result.n_test for run in check.runs) / check.reps
+    print(
+        f"\n{check.reps} runs in {elapsed:.0f}s: detected {check.detected} ({check.power:.1%}; "
+        f"95% CI {low:.1%} to {high:.1%}) | expected {expected:.1%}"
+    )
+    # With no true effect there is no wrong direction to count.
+    wrong = f", wrong-direction detections {check.wrong_direction}" if effect else ""
+    print(
+        f"  mean difference {mean_diff * 100:+.2f}pp{wrong}, "
+        f"mean arm sizes {mean_c:,.0f} / {mean_t:,.0f}"
+    )
+    print(f"\n{SYNTHETIC_LABEL}")
     return 0
 
 

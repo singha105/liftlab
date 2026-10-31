@@ -173,6 +173,10 @@ class Behavior:
         return 1 + at_least_one * room2 + at_least_two * room3
 
 
+# The pre-registered Quick Start test (docs/experiments/EXP-001.md) and its feature flag key.
+QUICK_START_KEY = "exp-001"
+
+
 @dataclass(frozen=True)
 class Experiment:
     """A test that starts `start_day` days into the window and runs to the end.
@@ -191,7 +195,7 @@ class Experiment:
     of a sample-ratio mismatch. They still get the test experience.
     """
 
-    key: str = "quick-start"
+    key: str = QUICK_START_KEY
     start_day: int = 28
     audience: str = "all"
     activation_effect: float = 0.0
@@ -626,7 +630,7 @@ class _Run:
             length = _pick(self.py, self.first_length)
             goal = r() < self.p_goal[i]
             finished = r() < self._p_finish(i, length, goal, first=True)
-            quick = is_new_in_test and exp.key == "quick-start"
+            quick = is_new_in_test and exp.key == QUICK_START_KEY
             self._sprint(events, t1, length, goal, finished, "quick_start" if quick else "preset")
             if finished:
                 activated = True
