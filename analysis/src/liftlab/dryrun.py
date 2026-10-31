@@ -2,9 +2,9 @@
 
 Each run simulates new users arriving into a 50/50 test, loads their events into an in-memory
 warehouse, builds the SQL models, and reads activation the way the real analysis will: from
-`dim_users`, for exposed users, stopping once both arms have the planned number. Then a
-two-proportion z-test. Repeated, the share of runs that detect the effect is the empirical
-power; with no effect, it's the false-positive rate.
+`dim_users`, for exposed users, stopping once both arms have the planned number. Then the
+stats library's two-proportion z-test. Repeated, the share of runs that detect the effect is
+the empirical power; with no effect, it's the false-positive rate.
 """
 
 import math
@@ -14,6 +14,7 @@ from statistics import NormalDist
 
 from liftlab import warehouse
 from liftlab.simulate import QUICK_START_KEY, Experiment, simulate
+from liftlab.stats.tests import Comparison, ztest_proportions
 
 _Z = NormalDist()
 # Users arrive over two simulated weeks and the last day's don't get a full 24 hours, so each
@@ -23,42 +24,11 @@ USERS_PER_NEEDED = 1.3
 
 
 @dataclass(frozen=True)
-class ZTest:
-    n_control: int
-    n_test: int
-    rate_control: float
-    rate_test: float
-    diff: float  # test - control
-    ci_low: float
-    ci_high: float
-    z: float
-    p_value: float
-
-
-def two_proportion_ztest(
-    x_control: int, n_control: int, x_test: int, n_test: int, *, alpha: float = 0.05
-) -> ZTest:
-    """Two-sided z-test with the pooled rate, and a Wald interval for test - control.
-
-    The simple test from the pre-registration; Day 5's stats library replaces it.
-    """
-    p_c, p_t = x_control / n_control, x_test / n_test
-    pooled = (x_control + x_test) / (n_control + n_test)
-    se_null = math.sqrt(pooled * (1 - pooled) * (1 / n_control + 1 / n_test))
-    se = math.sqrt(p_c * (1 - p_c) / n_control + p_t * (1 - p_t) / n_test)
-    diff = p_t - p_c
-    z = diff / se_null if se_null else 0.0
-    half = _Z.inv_cdf(1 - alpha / 2) * se
-    p_value = 2 * (1 - _Z.cdf(abs(z)))
-    return ZTest(n_control, n_test, p_c, p_t, diff, diff - half, diff + half, z, p_value)
-
-
-@dataclass(frozen=True)
 class Run:
     seed: int
     true_control: float
     true_effect: float
-    result: ZTest
+    result: Comparison
     detected: bool
 
 
@@ -97,7 +67,7 @@ def run_once(seed: int, n_per_arm: int, effect: float, *, alpha: float = 0.05) -
         raise RuntimeError(f"seed {seed}: too few users to fill both arms")
 
     (n_c, x_c), (n_t, x_t) = counts["control"], counts["test"]
-    result = two_proportion_ztest(x_c, n_c, x_t, n_t, alpha=alpha)
+    result = ztest_proportions(x_c, n_c, x_t, n_t, alpha=alpha)
     truth = sim.truth.experiment
     return Run(
         seed, truth.activation_control, truth.activation_effect, result, result.p_value < alpha
