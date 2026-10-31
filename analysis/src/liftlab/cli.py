@@ -1,4 +1,4 @@
-"""`liftlab`: load events, build the SQL models, print the reports, plan experiments."""
+"""`liftlab`: load events, build the SQL models, print the reports, plan and read experiments."""
 
 import argparse
 import json
@@ -9,11 +9,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from liftlab import dryrun, posthog_export, warehouse
+from liftlab import dryrun, posthog_export, readout, warehouse
 from liftlab.simulate import Experiment, simulate
 from liftlab.stats import power as pw
 
 POSTHOG_EXPORT = warehouse.REPO_DIR / "data" / "raw" / "posthog_events.jsonl"
+EXP_001_CONFIG = warehouse.REPO_DIR / "docs" / "experiments" / "EXP-001.yaml"
 SYNTHETIC_LABEL = "SYNTHETIC: simulated users with known ground truth, not real usage"
 
 
@@ -65,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
     dry.add_argument("--power", type=float, default=0.80)
     dry.add_argument("--first-seed", type=int, default=1)
 
+    read = commands.add_parser("readout", help="run an experiment's pre-registered analysis")
+    read.add_argument("--config", type=Path, default=EXP_001_CONFIG, help="experiment YAML")
+    read.add_argument("--source", choices=warehouse.SOURCES, default="posthog")
+    read.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    read.add_argument("--out", type=Path, help="write the readout here instead of printing it")
+
     args = parser.parse_args(argv)
     if args.command == "export-posthog":
         return _export(args)
@@ -75,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     con = warehouse.connect(args.db)
     if args.command == "load":
         return _load(con, args)
+    if args.command == "readout":
+        return _readout(con, args)
     if args.command == "build":
         started = time.perf_counter()
         built = warehouse.build(con)
@@ -281,10 +290,10 @@ def _dry_run(args) -> int:
 
     r = first.result
     print(
-        f"\nRun 1 (seed {first.seed}): control {r.rate_control * r.n_control:,.0f}/{r.n_control:,}"
-        f" = {r.rate_control:.1%} | test {r.rate_test * r.n_test:,.0f}/{r.n_test:,}"
-        f" = {r.rate_test:.1%} | diff {r.diff * 100:+.1f}pp (95% CI {r.ci_low * 100:+.1f} to"
-        f" {r.ci_high * 100:+.1f}) | z {r.z:.2f}, p {r.p_value:.4f}"
+        f"\nRun 1 (seed {first.seed}): control {r.control * r.n_control:,.0f}/{r.n_control:,}"
+        f" = {r.control:.1%} | test {r.test * r.n_test:,.0f}/{r.n_test:,}"
+        f" = {r.test:.1%} | diff {r.diff * 100:+.1f}pp (95% CI {r.ci[0] * 100:+.1f} to"
+        f" {r.ci[1] * 100:+.1f}) | z {r.statistic:.2f}, p {r.p_value:.4f}"
         f" | {'detected' if first.detected else 'not detected'}"
     )
     low, high = check.power_ci()
@@ -302,6 +311,23 @@ def _dry_run(args) -> int:
         f"mean arm sizes {mean_c:,.0f} / {mean_t:,.0f}"
     )
     print(f"\n{SYNTHETIC_LABEL}")
+    return 0
+
+
+def _readout(con, args) -> int:
+    config = readout.load_config(args.config)
+    users = readout.experiment_users(con, config["key"], args.source)
+    if users.empty:
+        print(f"No users exposed to {config['key']} in the {args.source} data.", file=sys.stderr)
+        return 1
+    analyzed = readout.at_required_n(readout.population(users, config), config)
+    result = readout.build_readout(analyzed, config)
+    text = result.to_markdown() if args.format == "markdown" else result.to_json() + "\n"
+    if args.out:
+        args.out.write_text(text)
+        print(f"{result.decision}: wrote {args.out}")
+    else:
+        print(text, end="")
     return 0
 
 

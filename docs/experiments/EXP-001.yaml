@@ -1,0 +1,51 @@
+# EXP-001's analysis plan in the form `liftlab readout` runs. EXP-001.md is the
+# pre-registration and wins if the two ever disagree; this file only restates it.
+key: exp-001
+name: EXP-001 Quick Start
+arms: {control: 0.5, test: 0.5}  # planned allocation, checked by SRM
+control: control
+treatment: test
+alpha: 0.05
+srm_threshold: 0.001
+required_per_arm: 1377
+# Who is analyzed: every listed column must be true. New users with a closed 24-hour window.
+population: [new_at_exposure, activation_window_closed]
+
+primary:
+  name: Activation rate
+  type: proportion
+  column: activated
+  mde: 0.05
+  # Sensitivity check only: the decision uses the unadjusted estimate. CUPED's pre-period
+  # covariate is 0 for every new user, so EXP-001 adjusts for attributes fixed before
+  # exposure instead (analysis plan, step 5).
+  adjustment:
+    label: Regression-adjusted for device type and referrer (sensitivity only)
+    covariates: [device_type, referrer_type]
+
+secondary:
+  - name: Completed sessions per user in 7 days
+    type: mean
+    column: completed_sessions_7d
+
+guardrails:
+  - name: Abandon rate
+    type: ratio
+    numerator: abandoned_sessions_7d
+    denominator: ended_sessions_7d
+    max_increase: 0.02  # test - control, absolute
+  - name: Page load p75
+    type: quantile
+    column: load_ms_7d
+    quantile: 0.75
+    max_relative_increase: 0.10  # test p75 / control p75 - 1
+    max_value: 2000  # test p75, ms
+
+# Applied once at the read, top to bottom; the first rule whose conditions all hold decides.
+decision_rule:
+  - {decision: INVALID, when: [srm_failed]}
+  - {decision: UNDERPOWERED, when: [below_required_n]}
+  - {decision: KILL, when: [guardrail_regressed]}
+  - {decision: SHIP, when: [primary_ci_above_zero, secondaries_not_below_zero]}
+  - {decision: ITERATE, when: [primary_at_least_half_mde]}
+  - {decision: KILL, when: [otherwise]}
