@@ -167,26 +167,36 @@ More commands (`power`, `dry-run`, `readout`, `monitor`, `proofs`, `export-posth
 ### Architecture
 
 ```mermaid
-flowchart LR
-    APP["StudySprint<br/>TypeScript on GitHub Pages"] -- "planned events only" --> PH["PostHog<br/>events and the exp-001 flag"]
+flowchart TD
+    APP["StudySprint<br/>TypeScript on GitHub Pages"]
+    PH["PostHog<br/>events and the exp-001 flag"]
+    SIM["Simulator<br/>known ground truth"]
+    WH[("DuckDB warehouse<br/>rows tagged by source")]
+    SQL["7 SQL models<br/>funnel, retention, North Star"]
+    KAG["Cookie Cats CSV<br/>public Kaggle data"]
+    RO["Stats library and readout<br/>SRM, CUPED, mSPRT, decision rule"]
+    MEMO["Readouts and memos"]
+    DASH["Streamlit dashboard"]
+
+    APP -- "planned events only" --> PH
     PH -- "control or test" --> APP
-    PH -- "export-posthog<br/>HogQL query API" --> WH
-    SIM["Simulator<br/>known ground truth"] -- "SYNTHETIC" --> WH
-    WH[("DuckDB warehouse<br/>rows tagged by source")] --> SQL["7 SQL models<br/>funnel, retention, North Star,<br/>experiment users"]
-    SQL --> RO["Stats library and readout<br/>SRM, tests, CUPED, mSPRT,<br/>decision rule"]
-    KAG["Cookie Cats CSV<br/>REAL, public"] --> RO
-    RO --> MEMO["Readouts and memos<br/>docs/experiments"]
-    SQL --> DASH["Streamlit dashboard"]
+    PH -- "export-posthog" --> WH
+    SIM -- "SYNTHETIC" --> WH
+    WH --> SQL
+    SQL --> RO
+    KAG -- "REAL" --> RO
+    RO --> MEMO
     RO --> DASH
+    SQL --> DASH
 ```
 
 ```
 liftlab/
-├── app/            StudySprint: Vite + TypeScript, deployed to GitHub Pages
-├── analysis/       Python package `liftlab`: simulator, warehouse, SQL, stats, readouts, dashboard
-├── data/           local only, gitignored: raw downloads, exports, DuckDB files
-├── docs/           brief, metrics, tracking plan, backlog, experiments, decisions, progress log
-└── .github/        CI (analysis and app on every push) and the Pages deploy
+├── app/        StudySprint: Vite + TypeScript, on GitHub Pages
+├── analysis/   Python package `liftlab`: simulator, SQL, stats, dashboard
+├── data/       local only, gitignored: downloads, exports, DuckDB
+├── docs/       brief, metrics, experiments, decisions, progress log
+└── .github/    CI and the Pages deploy
 ```
 
 ### Tech stack
