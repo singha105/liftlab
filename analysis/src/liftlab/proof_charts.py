@@ -16,20 +16,8 @@ import numpy as np  # noqa: E402
 from matplotlib.ticker import FuncFormatter, PercentFormatter  # noqa: E402
 
 from liftlab import proofs  # noqa: E402
+from liftlab.palette import THEMES  # noqa: E402
 from liftlab.readout import SYNTHETIC_LABEL  # noqa: E402
-
-THEMES = {
-    "light": {
-        "surface": "#fcfcfb", "ink": "#0b0b0b", "secondary": "#52514e", "muted": "#898781",
-        "grid": "#e1e0d9", "axis": "#c3c2b7", "one": "#2a78d6", "two": "#eb6834",
-        "neutral": "#c3c2b7",
-    },
-    "dark": {
-        "surface": "#1a1a19", "ink": "#f0efec", "secondary": "#c3c2b7", "muted": "#898781",
-        "grid": "#2c2c2a", "axis": "#383835", "one": "#3987e5", "two": "#d95926",
-        "neutral": "#52514e",
-    },
-}  # fmt: skip
 
 
 def save_all(results: dict[str, object], out_dir: Path) -> list[Path]:

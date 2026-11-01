@@ -98,6 +98,9 @@ def main(argv: list[str] | None = None) -> int:
     proof.add_argument("--only", nargs="+", choices=PROOFS, help="run just these proofs")
     proof.add_argument("--out", type=Path, default=DOCS_IMG, help="charts and stats-proofs.json")
 
+    tree = commands.add_parser("metric-tree", help="draw docs/METRICS.md's metric tree as PNGs")
+    tree.add_argument("--out", type=Path, default=DOCS_IMG)
+
     args = parser.parse_args(argv)
     if args.command == "export-posthog":
         return _export(args)
@@ -109,6 +112,13 @@ def main(argv: list[str] | None = None) -> int:
         return _proofs(args)
     if args.command == "cookie-cats":
         return _cookie_cats(args)
+    if args.command == "metric-tree":
+        from liftlab import metric_tree  # matplotlib is a dev dependency
+
+        tree = metric_tree.parse(metric_tree.METRICS.read_text())
+        for path in metric_tree.save(tree, args.out):
+            print(f"wrote {path}")
+        return 0
     con = warehouse.connect(args.db)
     if args.command == "load":
         return _load(con, args)
