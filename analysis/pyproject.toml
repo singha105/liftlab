@@ -23,12 +23,18 @@ requires = ["uv_build>=0.12.23,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
+dashboard = [
+    "streamlit>=1.66.1",
+]
 dev = [
     "matplotlib>=3.11.2",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
     "statsmodels>=0.15.0",
 ]
+
+[tool.uv]
+default-groups = ["dev", "dashboard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

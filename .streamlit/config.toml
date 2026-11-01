@@ -1,0 +1,14 @@
+# Streamlit reads this from the folder it's started in, and Community Cloud only from the repo
+# root, so run the dashboard from here. Light and dark still follow the viewer's system setting;
+# only the accent changes, to the charts' blue.
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
+
+[theme.light]
+primaryColor = "#2a78d6"
+
+[theme.dark]
+primaryColor = "#3987e5"
