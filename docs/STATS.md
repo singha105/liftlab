@@ -253,6 +253,6 @@ cd analysis && uv run liftlab monitor --source posthog
 
 ## What the proofs don't show
 
-- The simulator's users follow the assumptions in [ANALYTICS.md](ANALYTICS.md). Real metrics can have heavier tails, novelty effects and weekly cycles, which these simulations don't have. Day 6 re-analyzes the public Cookie Cats A/B test to check the library on real data.
+- The simulator's users follow the assumptions in [ANALYTICS.md](ANALYTICS.md). Real metrics can have heavier tails, novelty effects and weekly cycles, which these simulations don't have. The library's first real data is the public Cookie Cats A/B test, read in [EXP-000](experiments/EXP-000-memo.md): its game rounds have a far heavier tail than anything simulated here, with one player at 49,854 rounds.
 - The mSPRT on binary data uses plug-in variances, which the paper calls approximately valid. The peeking proof shows it holding at EXP-001's size and baseline, not everywhere.
 - The SRM check is weak at EXP-001's size. At 2,754 users it catches a 52/48 split only about 12% of the time, and catching it 80% of the time takes about 10,700 users. At 2,754 users it's reliable (80%) only for skews of about 54/46 or worse, and in the live run, at about 140 users per arm, only for about 62/38 or worse.
