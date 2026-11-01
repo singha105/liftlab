@@ -1,49 +1,132 @@
 # LiftLab
 
-LiftLab is a growth-analytics project built around a small, real product. StudySprint is a focus timer for students: it runs on GitHub Pages and sends anonymous events to PostHog. Around it sits what a growth team would use to improve it: a North Star and metric tree, a tracking plan, a DuckDB warehouse with SQL funnels and retention, pre-registered A/B tests behind feature flags, and a Python stats library (SRM checks, bootstrap, CUPED, sequential testing) that's also used to re-analyze the public Cookie Cats A/B test. It all runs on free tiers.
+[![CI](https://github.com/singha105/liftlab/actions/workflows/ci.yml/badge.svg)](https://github.com/singha105/liftlab/actions/workflows/ci.yml)
+[![Deploy app](https://github.com/singha105/liftlab/actions/workflows/deploy-app.yml/badge.svg)](https://github.com/singha105/liftlab/actions/workflows/deploy-app.yml)
+[![Release](https://img.shields.io/github/v/release/singha105/liftlab)](https://github.com/singha105/liftlab/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Try it:** [singha105.github.io/liftlab](https://singha105.github.io/liftlab/). Add [`?demo=1`](https://singha105.github.io/liftlab/?demo=1) to run every timer in seconds instead of minutes.
+**One small product taken from discovery to decision with data: a shipped study timer, its North Star and tracking, pre-registered A/B tests, a stats library checked against known answers, and a real keep-or-ship call on a public A/B test. All on free tiers, at $0.**
 
-## Privacy
+[Live StudySprint](https://singha105.github.io/liftlab/) · Dashboard screenshots: [Overview](docs/img/dashboard-overview.png), [Funnel](docs/img/dashboard-funnel.png), [Retention](docs/img/dashboard-retention.png), [Experiments](docs/img/dashboard-experiments.png), [Stats proofs](docs/img/dashboard-proofs.png) · Decision memos: [EXP-000 Cookie Cats](docs/experiments/EXP-000-memo.md), [EXP-001 Quick Start](docs/experiments/EXP-001-interim.md)
 
-StudySprint sends anonymous usage analytics only: no account, no names or emails, nothing you type, no session recording, no IP addresses. Do Not Track and Global Privacy Control are respected (PostHog isn't even loaded), and the footer has a switch to turn analytics off. Exactly which events are sent is listed in the [tracking plan](docs/TRACKING_PLAN.md), and a test fails if the code and that list disagree.
+Every number below is labeled. **REAL** means real people: the public Cookie Cats test, or StudySprint's live users (none yet). **SYNTHETIC** means simulated users with known ground truth, not real usage.
 
-## Layout
+## In 90 seconds
 
-```
-liftlab/
-├── app/            StudySprint: Vite + TypeScript, deployed to GitHub Pages
-├── analysis/       Python package `liftlab`: simulator, DuckDB warehouse, stats library, tests
-│   ├── dashboard.py        the Streamlit dashboard; its pages are in dashboard_pages/
-│   ├── sql/        the seven SQL models, built in order by `liftlab build`
-│   └── src/liftlab/
-│       ├── stats/      SRM, z and Welch tests, delta method, bootstrap, CUPED, mSPRT, Holm, power
-│       ├── readout.py  runs a pre-registered analysis plan and its decision rule
-│       ├── monitor.py  the weekly SRM and guardrail checks while a test runs
-│       ├── cookie_cats.py  the Cookie Cats re-analysis, EXP-000
-│       └── proofs.py   the stats library on thousands of simulated experiments
-├── data/           local only, gitignored: raw downloads, event exports, DuckDB files
-│   └── raw/
-├── docs/
-│   ├── PRODUCT_BRIEF.md       who it's for, core loop, v1 scope
-│   ├── METRICS.md             North Star, metric tree, exact definitions
-│   ├── TRACKING_PLAN.md       every event, its properties, privacy rules
-│   ├── EXPERIMENT_BACKLOG.md  ICE-ranked hypotheses
-│   ├── ANALYTICS.md           the warehouse, the models, the simulator and its ground truth
-│   ├── STATS.md               every statistical method, its formula and how it's checked
-│   ├── img/                   charts for the docs
-│   ├── experiments/           pre-registrations and PostHog setup, one per experiment
-│   ├── decisions/             decision records
-│   └── PROGRESS.md            day-by-day log
-├── .streamlit/     the dashboard's theme (Streamlit reads it from the repo root)
-├── .github/workflows/
-│   ├── deploy-app.yml   test, build and deploy app/ to Pages
-│   └── analysis.yml     ruff and pytest for analysis/ on every push
-├── .env.example    PostHog settings for event export (copy to .env)
-└── LICENSE         MIT
-```
+- **Shipped [StudySprint](https://singha105.github.io/liftlab/)**, a focus timer for students, in vanilla TypeScript on GitHub Pages: 6.2 kB of gzipped JavaScript, anonymous PostHog analytics with the privacy rules enforced in code, and a typed tracking plan the build checks.
+- **Chose a North Star** (weekly completed sessions) and a metric tree, then built the funnel and D1/D7/D28 retention in DuckDB SQL, checked against a simulator's ground truth: activation 29.95% against a true 30.69% on one seed, and exactly 30.69% averaged over six (SYNTHETIC).
+- **Pre-registered a Quick Start A/B test** behind a feature flag before writing the variant, and found before launch that it needs 1,377 users per arm: 551 days at StudySprint's traffic. So the live run proves the plumbing, and the statistics are validated where the answer is known.
+- **Built and proved an experiment library**: on 1,000 simulated A/A tests peeked at daily for 28 days, a fixed-horizon z-test declared a false win 27.3% of the time and the mSPRT 1.7%; CUPED cut variance 22% (SYNTHETIC).
+- **Made a real call on a public A/B test.** Cookie Cats, 90,189 players: moving the first gate from level 30 to level 40 lowered 7-day retention by 0.82 points (95% CI −1.33 to −0.31), so the recommendation is to keep it at level 30 (REAL).
 
-## Running it
+## The product and its North Star
+
+StudySprint is for a university student who has time to study but can't get started. Pick 15, 25 or 50 minutes, optionally tap what you're working on, and focus until the timer ends. Finishing a session grows your streak, and a weekly summary shows what you got done. There's no account and no backend; everything lives in the browser. ([Product brief](docs/PRODUCT_BRIEF.md))
+
+The North Star is **weekly completed sessions**: focus sessions that ran to the end. A completed session is the unit of value, it leads retention through the streak, and it splits exactly into weekly active users × sessions per active user × completion rate, so every experiment can name the input it moves. Weekly active users was rejected as a vanity metric, and weekly focus minutes rewards long sessions over follow-through. ([ADR 0001](docs/decisions/0001-north-star.md), [METRICS.md](docs/METRICS.md))
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/metric-tree-dark.png">
+  <img src="docs/img/metric-tree-light.png" alt="StudySprint's metric tree. Weekly completed sessions (North Star) splits into weekly active users, sessions started per active user and completion rate, each with its drivers: new users, activation, returning users, D1/D7/D28 retention, streak views, active days per week, weekly summary views, goal-set rate and planned-minutes mix. Guardrails: abandon rate and page load p75." width="820">
+</picture>
+
+**Privacy.** StudySprint sends only the events in the [tracking plan](docs/TRACKING_PLAN.md): no names or emails, nothing typed, no session recording, no autocapture. Do Not Track and Global Privacy Control mean PostHog isn't even downloaded, and the footer has a switch to turn analytics off. A test fails if the code and the tracking plan disagree. ([ADR 0002](docs/decisions/0002-privacy-by-default.md))
+
+## What the data showed
+
+StudySprint has no PostHog key yet, so it has sent no events: **REAL: StudySprint live data, N = 0.** The product numbers come from the simulator (seed 7, 20,000 users), whose behavior is built from the [experiment backlog's](docs/EXPERIMENT_BACKLOG.md) assumed baselines. They show that the SQL measures what it should. They can't show how real students behave.
+
+**Activation funnel (SYNTHETIC).** New users with 7 full days of data:
+
+| Step | Users | From the step before | Of everyone |
+|---|---|---|---|
+| Opened the app | 16,881 | | 100% |
+| Started a session within 24 h | 8,362 | 49.5% | 49.5% |
+| Completed one within 24 h (activated) | 5,069 | 60.6% | 30.0% |
+| Started another within 7 days | 4,750 | 93.7% | 28.1% |
+
+**The biggest drop-off is the first step**: 8,519 new users (50.5%) never start a session. That's the leak EXP-001 targets.
+
+<img src="docs/img/dashboard-funnel.png" alt="The dashboard's Funnel page, with the step that loses the most people, starting a session within 24 hours, highlighted in orange. SYNTHETIC." width="720">
+
+**Retention (SYNTHETIC).** Across the weekly cohorts, D1 retention runs 24.3% to 26.0%, D7 13.8% to 16.3% and D28 8.2% to 8.5%. ([Retention page](docs/img/dashboard-retention.png), [ANALYTICS.md](docs/ANALYTICS.md))
+
+The SQL is tested against the simulator's truth. On seed 7, activation came out at 29.95% against a true 30.69%, 2.2 standard errors low; across seeds 1 to 6 it averages 30.69% exactly, so the gap is sampling, not bias.
+
+## Experiments
+
+### EXP-001: Quick Start for first-time visitors
+
+> A first-time visitor makes three choices before the timer runs, and starting is where half of them are lost. A one-click "Start a 25-minute focus" button should raise activation.
+
+- **Design.** 50/50 on PostHog flag `exp-001`, new users only, exposed on their first open if the flag loads within 1.5 s and they haven't touched the screen. The primary is activation (a completed session within 24 hours); the secondary is completed sessions per user in 7 days; abandon rate (+2.0 points) and page load p75 (+10%, or over 2,000 ms) are guardrails. The decision rule has six steps, from INVALID to KILL. ([Pre-registration](docs/experiments/EXP-001.md))
+- **Pre-registered first.** The plan was pushed on its own (81f2df5), before any variant code existed, so GitHub has its timestamp.
+- **Power.** Baseline 30.0% (SYNTHETIC), MDE +5 points, alpha 0.05, power 0.80: **1,377 users per arm**. Detecting +3 points would take 3,763.
+- **Honest feasibility.** At about 5 eligible new users a day, 1,377 per arm takes 551 days. The live run is capped at 8 weeks, about 140 per arm, where it catches a +5-point lift only 14.5% of the time; the smallest lift it would catch 80% of the time is 16.2 points. So the live run is there to prove the flag, exposure and export, and the decision rule will call it UNDERPOWERED. ([ADR 0003](docs/decisions/0003-validate-where-the-answer-is-known.md))
+- **Checked before launch (SYNTHETIC).** 200 simulated runs at a true +5 points detected it 78.5% of the time (expected 79.6%), and 2,400 runs with no effect flagged 5.6%. A full-size simulated read says SHIP at +9.9 points (95% CI +6.5 to +13.4) against a true +5.0; over 40 seeds the mean estimate was +5.12 and 36 of 40 intervals covered the truth.
+- **Status.** Not launched: REAL N = 0. [Interim readout and recommendation](docs/experiments/EXP-001-interim.md).
+
+### EXP-000: Cookie Cats, a real decision
+
+The public [Cookie Cats test](https://www.kaggle.com/datasets/yufengsui/mobile-games-ab-testing) moved a mobile game's first gate from level 30 to level 40. I re-analyzed it with the same library and decision rule, under a plan that says up front it was written after the data existed. ([Plan](docs/experiments/EXP-000-cookie-cats.md), [readout](docs/experiments/EXP-000-readout.md), [memo](docs/experiments/EXP-000-memo.md))
+
+| REAL, 90,189 players | gate_30 | gate_40 | gate_40 − gate_30 (95% CI) | p |
+|---|---|---|---|---|
+| **7-day retention** (primary) | 19.02% | 18.20% | **−0.82 points** [−1.33, −0.31] | 0.0016 |
+| 1-day retention | 44.82% | 44.23% | −0.59 points [−1.24, +0.06] | 0.074 (Holm 0.15) |
+| Game rounds in 14 days, mean | 52.46 | 51.30 | −1.16 [−3.72, +1.40] | 0.38 |
+| Never played a round (guardrail) | 4.33% | 4.52% | +0.19 points, limit +1.0 | ok |
+
+**Recommendation: keep the gate at level 30.** The SRM check passed (p = 0.0086 against a 0.001 threshold), both arms had more than the 24,641 players they needed, the guardrail held, and 7-day retention's interval is entirely below zero: 4.3% fewer players back a week after install. A bootstrap of 2,000 resamples gives nearly the same interval as the z-test.
+
+One player logged 49,854 game rounds in 14 days, 3,561 a day. They stay in the analysis and are reported: dropping them moves the game-rounds gap from −1.16 to −0.04, a secondary that wasn't significant either way. CUPED doesn't apply, because players were randomized at install and there's no pre-experiment behavior to adjust with. The memo lists the risks, including the split itself: p = 0.0086 passes at 0.001 but would fail at 0.01.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/exp-000-retention-dark.png">
+  <img src="docs/img/exp-000-retention-light.png" alt="7-day and 1-day retention differences, gate_40 minus gate_30, with z-test and bootstrap 95% intervals. 7-day: −0.82 points, entirely below zero. 1-day: −0.59 points, crossing zero. REAL." width="720">
+</picture>
+
+## Statistical rigor
+
+The library in `analysis/src/liftlab/stats/` covers SRM, the two-proportion z-test, Welch's t-test, the delta method for ratio metrics, a user-level bootstrap, CUPED, the mSPRT and Holm's correction. Each function is tested against scipy or statsmodels where they compute the same thing, and every method is checked on thousands of simulated experiments where the truth is known. ([STATS.md](docs/STATS.md))
+
+| Proof (SYNTHETIC, 1,000 experiments each) | Result | Should be |
+|---|---|---|
+| A/A, no effect, read once at 1,377 per arm | 5.8% false positives (95% CI 4.5% to 7.4%) | 5% |
+| A/A peeked at daily for 28 days | fixed-horizon z-test 27.3%; mSPRT 1.7% | mSPRT at most 5% |
+| CUPED with a 28-day pre-period | variance −22%, intervals 11% narrower, coverage 95.6% | coverage 95% |
+| True +5-point lift at 1,377 per arm | 81.8% detected (95% CI 79.3% to 84.1%) | 79.6% |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/stats-peeking-dark.png">
+  <img src="docs/img/stats-peeking-light.png" alt="Cumulative share of simulated A/A experiments stopped for a false win, by daily look. The fixed-horizon z-test climbs to 27.3%; the mSPRT stays under 2%. SYNTHETIC." width="720">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/stats-aa-pvalues-dark.png">
+  <img src="docs/img/stats-aa-pvalues-light.png" alt="Histogram of p-values from 1,000 simulated A/A experiments, close to flat. 5.8% false positives. SYNTHETIC." width="400">
+</picture>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/stats-cuped-dark.png">
+  <img src="docs/img/stats-cuped-light.png" alt="Histograms of the estimated difference across simulated A/A experiments, unadjusted and with CUPED; the CUPED estimates are more tightly packed. Variance down 22%. SYNTHETIC." width="400">
+</picture>
+
+What the proofs don't show: the simulator has no heavy tails, novelty effects or weekly cycles, and the SRM check is weak at EXP-001's size (it catches a 52/48 split only about 12% of the time at 2,754 users).
+
+## Key decisions and trade-offs
+
+The decision records are in [docs/decisions/](docs/decisions/); the rest are in each day's log in [PROGRESS.md](docs/PROGRESS.md).
+
+- **Weekly completed sessions as the North Star** ([ADR 0001](docs/decisions/0001-north-star.md)). It can be gamed with short sessions, so the shortest preset is 15 minutes and the length mix is watched.
+- **Anonymous analytics with privacy in code** ([ADR 0002](docs/decisions/0002-privacy-by-default.md)). The cost: identity is one browser, so retention is understated, and Do Not Track users are missing.
+- **Validate where the answer is known** ([ADR 0003](docs/decisions/0003-validate-where-the-answer-is-known.md)). The live test can't reach N, so it proves the plumbing and LiftLab makes no claim about Quick Start's real effect.
+- **A fixed read for the primary; the mSPRT only to monitor** ([ADR 0004](docs/decisions/0004-fixed-read-sequential-monitoring.md)). No early wins, and the weekly checks only catch large regressions.
+- **Only a loaded flag enrolls anyone.** The first version put slow or ad-blocked visitors into control, which would have built a sample-ratio mismatch into the test. Now they're left out.
+- **Exposure is decided before the arm is known**, so both arms are filtered the same way. The cost is that a test user can see the normal screen for up to 1.5 s before Quick Start replaces it.
+- **Guardrails are judged on the point estimate.** That raises a false alarm about 8% of the time on abandon rate, accepted because more abandoned sessions is the test's main risk.
+- **Outliers are reported, never silently dropped**, and anything chosen after seeing the data is marked as such.
+
+## Quickstart
 
 The app needs Node 20.19+ or 22.12+:
 
@@ -51,97 +134,97 @@ The app needs Node 20.19+ or 22.12+:
 cd app && npm install && npm run dev
 ```
 
-```bash
-cd app && npm test
-```
-
-Analytics stay off locally unless you copy `app/.env.example` to `app/.env.local` and add a PostHog project key. The deployed build gets `VITE_POSTHOG_KEY` and `VITE_POSTHOG_HOST` from repository variables in [the deploy workflow](.github/workflows/deploy-app.yml).
-
-The analysis package needs [uv](https://docs.astral.sh/uv/). This simulates 20,000 users, loads them into DuckDB, builds the funnel, retention and North Star models, and prints them:
+The analysis needs [uv](https://docs.astral.sh/uv/). This simulates 20,000 users, builds the SQL models and prints the funnel, retention and North Star (all SYNTHETIC):
 
 ```bash
 cd analysis && uv run liftlab load --source synthetic && uv run liftlab build && uv run liftlab report
 ```
 
-```bash
-cd analysis && uv run pytest
-```
-
-The numbers it prints are **synthetic**: simulated users with known ground truth, used to check that the SQL measures what it should. [ANALYTICS.md](docs/ANALYTICS.md) explains the models, the simulator and how to pull real events from PostHog.
-
-Planning an experiment, and checking the plan against simulated experiments with a known effect:
-
-```bash
-cd analysis && uv run liftlab power --baseline 0.30 --mde 0.05 --daily 5 10 40
-```
-
-```bash
-cd analysis && uv run liftlab dry-run --reps 200
-```
-
-Reading an experiment: the pre-registered readout (SRM, primary, guardrails, secondaries, then the decision rule), and the weekly checks while it runs. Both read from the warehouse, so load and build first:
-
-```bash
-cd analysis && uv run liftlab readout --source posthog
-```
-
-```bash
-cd analysis && uv run liftlab monitor --source posthog
-```
-
-The stats library is checked on thousands of simulated experiments where the truth is known. It takes up to an hour on 8 cores and redraws the charts in [docs/STATS.md](docs/STATS.md):
-
-```bash
-cd analysis && uv run liftlab proofs
-```
-
-Reading an experiment before it reaches its planned N. `--interim` gives the read so far at any N, with the power it has and the smallest effect it could detect, and decides nothing ([EXP-001's Amendment 2](docs/experiments/EXP-001.md)):
-
-```bash
-cd analysis && uv run liftlab readout --source posthog --interim
-```
-
-The library's first real data is the public [Cookie Cats A/B test](https://www.kaggle.com/datasets/yufengsui/mobile-games-ab-testing): 90,189 players of a mobile game, with the first gate at level 30 or level 40. Save the Kaggle CSV as `data/raw/cookie_cats.csv` (it's gitignored and never committed), then:
-
-```bash
-cd analysis && uv run liftlab cookie-cats
-```
-
-The plan is [EXP-000](docs/experiments/EXP-000-cookie-cats.md), written after the data existed and labeled as such, and the decision is in [the memo](docs/experiments/EXP-000-memo.md): keep the gate at level 30.
-
-The running experiment is [EXP-001, Quick Start](docs/experiments/EXP-001.md), behind the PostHog flag `exp-001`. To see its test arm without being enrolled, open [`?demo=1&variant=test`](https://singha105.github.io/liftlab/?demo=1&variant=test) in a private window.
-
-## Dashboard
-
-Five pages: Overview (the North Star, its inputs and guardrails, the metric tree), Funnel, Retention, Experiments (EXP-000, EXP-001, or any CSV you upload, plus a sample-size calculator) and Stats proofs. Every page has a REAL or SYNTHETIC badge. Run it from the repo root, so Streamlit finds `.streamlit/config.toml`:
+The dashboard, from the repo root (it needs no secrets and no local data):
 
 ```bash
 uv run --project analysis streamlit run analysis/dashboard.py
 ```
 
-It needs no secrets and no local data. Without a warehouse it builds the synthetic run (a few seconds), and without the Cookie Cats CSV it shows the saved EXP-000 readout and offers an upload to recompute it. StudySprint's own pages switch to REAL once `liftlab export-posthog` has loaded live events.
+The Cookie Cats readout needs the [Kaggle CSV](https://www.kaggle.com/datasets/yufengsui/mobile-games-ab-testing) saved as `data/raw/cookie_cats.csv`, which is gitignored:
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/dashboard-experiments-dark.png">
-  <img alt="The Experiments page: EXP-000's decision, metrics table, interval charts and outlier check" src="docs/img/dashboard-experiments.png" width="720">
-</picture>
+```bash
+cd analysis && uv run liftlab cookie-cats
+```
 
-More screenshots: [Overview](docs/img/dashboard-overview.png), [Funnel](docs/img/dashboard-funnel.png), [Retention](docs/img/dashboard-retention.png), [Stats proofs](docs/img/dashboard-proofs.png).
+Tests:
 
-### Deploying to Streamlit Community Cloud
+```bash
+cd analysis && uv run pytest
+```
 
-It's free for a public repo and needs no secrets:
+```bash
+cd app && npm test
+```
 
-1. At [share.streamlit.io](https://share.streamlit.io), sign in with GitHub and create an app from an existing repo.
-2. Repository `singha105/liftlab`, branch `main`, main file path `analysis/dashboard.py`.
-3. Under Advanced settings, pick Python 3.12 and leave Secrets empty.
-4. Deploy.
+More commands (`power`, `dry-run`, `readout`, `monitor`, `proofs`, `export-posthog`) are in [ANALYTICS.md](docs/ANALYTICS.md) and [STATS.md](docs/STATS.md). To deploy the dashboard to Streamlit Community Cloud for free, point it at `analysis/dashboard.py` on `main` with Python 3.12 and no secrets; it installs from `analysis/uv.lock`.
 
-Community Cloud installs from `analysis/uv.lock`, since it looks next to the main file first and prefers `uv.lock` to `requirements.txt`, and it reads `.streamlit/config.toml` from the repo root. The deployed app has no warehouse, so StudySprint's pages show the synthetic run.
+### Architecture
+
+```mermaid
+flowchart LR
+    APP["StudySprint<br/>TypeScript on GitHub Pages"] -- "planned events only" --> PH["PostHog<br/>events and the exp-001 flag"]
+    PH -- "control or test" --> APP
+    PH -- "export-posthog<br/>HogQL query API" --> WH
+    SIM["Simulator<br/>known ground truth"] -- "SYNTHETIC" --> WH
+    WH[("DuckDB warehouse<br/>rows tagged by source")] --> SQL["7 SQL models<br/>funnel, retention, North Star,<br/>experiment users"]
+    SQL --> RO["Stats library and readout<br/>SRM, tests, CUPED, mSPRT,<br/>decision rule"]
+    KAG["Cookie Cats CSV<br/>REAL, public"] --> RO
+    RO --> MEMO["Readouts and memos<br/>docs/experiments"]
+    SQL --> DASH["Streamlit dashboard"]
+    RO --> DASH
+```
+
+```
+liftlab/
+├── app/            StudySprint: Vite + TypeScript, deployed to GitHub Pages
+├── analysis/       Python package `liftlab`: simulator, warehouse, SQL, stats, readouts, dashboard
+├── data/           local only, gitignored: raw downloads, exports, DuckDB files
+├── docs/           brief, metrics, tracking plan, backlog, experiments, decisions, progress log
+└── .github/        CI (analysis and app on every push) and the Pages deploy
+```
+
+### Tech stack
+
+| Part | Tools |
+|---|---|
+| Product | TypeScript 7, Vite 8, vitest, posthog-js, GitHub Pages |
+| Analytics | PostHog (events, feature flags), DuckDB 2.0, SQL |
+| Statistics | Python 3.12, NumPy, pandas, SciPy; statsmodels for cross-checks |
+| Presentation | Streamlit and Altair (dashboard), matplotlib (doc charts), Mermaid |
+| Engineering | uv, ruff, pytest, GitHub Actions |
+
+## What I'd do next
+
+**Now**
+- Add the PostHog project key, turn on "Discard client IP data", and launch EXP-001 for its 8 weeks, to confirm on real browsers that the split is fair, exposure fires once and the export reaches the warehouse.
+- Deploy the dashboard to Streamlit Community Cloud.
+
+**Next**
+- Once real users exist, check the backlog's assumptions against them, starting with D7 retention, since it also drives sample sizes, and re-rank the backlog.
+- Test backlog #2, a 15-minute first sprint, and #3, showing the streak before it exists, both aimed at activation.
+- Test ADR 0001's open question on real data: do week-1 completions predict D28 retention better than week-1 opens?
+
+**Later**
+- Accounts and sync, which would fix device-bound identity, and a fresh look at the North Star when they arrive.
+- PostHog batch exports instead of the query API if events ever pass 50,000 a day.
+
+### Limitations
+
+- **No real StudySprint users yet.** Every product number is SYNTHETIC, generated from the backlog's own assumptions, so it can't confirm them.
+- **EXP-001 can't reach its N** at realistic traffic; at its 8-week cap the smallest lift it would reliably catch is 16.2 points.
+- **One browser is one user**, so cleared storage, private windows and second devices inflate new users and understate retention.
+- **EXP-000's plan is retrospective.** It marks every choice made after seeing the data. Only the MDE could have changed the answer: below 0.75 points the read would have been UNDERPOWERED.
+- **Cookie Cats has no revenue or level-reached data**, so the memo can't weigh retention against purchases, and the effect on players who actually reach the gate is unknown.
 
 ## Status
 
-Day 6 of 7: the library has read its first real A/B test (Cookie Cats: keep the gate at level 30), EXP-001 has an interim read, and the dashboard shows all of it. EXP-001 is still waiting on the PostHog key. See [docs/PROGRESS.md](docs/PROGRESS.md).
+v1.0.0, built in seven days. The day-by-day log, with every check and decision, is [docs/PROGRESS.md](docs/PROGRESS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) to report a problem or suggest a change.
 
 ## License
 
