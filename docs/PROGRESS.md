@@ -406,3 +406,76 @@ The estimate came out at +9.9 points against a true +5.0, and its interval misse
 ### Next: Day 6
 
 Re-analyze the public Cookie Cats A/B test (about 90,000 players) with the same library: SRM, 1-day and 7-day retention with z-tests and bootstrap intervals, and a readout with a decision. It's the library's first real data.
+
+## Day 6, 2026-10-31: Cookie Cats re-analysis, EXP-001 interim read, dashboard
+
+**Cookie Cats decision (REAL): keep the first gate at level 30, because moving it to level 40 lowered 7-day retention from 19.02% to 18.20% (Δ −0.82pp, 95% CI [−1.33, −0.31]) with the SRM check passed (p = 0.0086).**
+
+Labels in this entry: every Cookie Cats number is **REAL** (the public Kaggle test, 90,189 players). EXP-001's live read is **REAL** with N = 0. EXP-001's full-size readout and every StudySprint page in the dashboard are **SYNTHETIC**: simulated users with known ground truth, not real usage.
+
+### Done
+
+- **[EXP-000](experiments/EXP-000-cookie-cats.md), a retrospective pre-registration** of the Cookie Cats test, written after the data existed and saying so at the top. It lists what I'd seen before writing it and marks each choice made after seeing the data: the MDE, the guardrail, the 10,000-round outlier cap and the baseline. It was committed (3cd6842) before any of the readout code.
+- **The readout library, extended for real data.** Every readout carries a label, SYNTHETIC or "REAL: <source>, N = x", with ", underpowered (needs n per arm)" when it is. Each metric can have bootstrap intervals for the mean or the median, guardrails can be proportions, and each decision maps to what it means for the product ("KILL: keep the gate at level 30").
+- **`liftlab cookie-cats`** loads the Kaggle CSV, checks its columns and duplicates, runs EXP-000's plan, reports every player over the cap, and draws the charts.
+- **[EXP-000 readout](experiments/EXP-000-readout.md) and [decision memo](experiments/EXP-000-memo.md)**: recommendation, evidence, the outlier, why there's no CUPED, risks, and what to test next.
+- **Amendment 2 to EXP-001**, dated today and before launch: interim reads are descriptive. Rule 2 makes any read before 1,377 per arm UNDERPOWERED, so no interim number can ship or kill Quick Start. The primary metric, the read and the decision rule are unchanged.
+- **`liftlab readout --interim`** and **[EXP-001-interim.md](experiments/EXP-001-interim.md)**: the REAL read (N = 0) and the SYNTHETIC full-size run, kept apart.
+- **The metric tree as an image**, drawn from the Mermaid block in METRICS.md by `liftlab metric-tree`, so the doc stays the source.
+- **The Streamlit dashboard** (`analysis/dashboard.py`): Overview, Funnel (biggest drop-off in orange), Retention (D1/D7/D28 heatmap), Experiments (EXP-000, EXP-001's REAL and SYNTHETIC tabs, or any uploaded CSV, plus the sample-size calculator) and Stats proofs. Every page has a REAL or SYNTHETIC badge. Screenshots are in `docs/img/dashboard-*.png`.
+- **Community Cloud prep.** No secrets. The dependency file is `analysis/uv.lock` (Streamlit added as a uv dependency group), and the theme moved to `.streamlit/config.toml` at the repo root, the only place Community Cloud reads it. Deploy steps are in the README. Not deployed.
+
+### Cookie Cats (REAL)
+
+From `uv run liftlab cookie-cats`. Players were randomized at install to `gate_30` (44,700) or `gate_40` (45,489).
+
+| Metric | gate_30 | gate_40 | gate_40 − gate_30 (95% CI) | p |
+|---|---|---|---|---|
+| **7-day retention** (primary) | 19.02% | 18.20% | **−0.82pp** [−1.33, −0.31]; bootstrap [−1.35, −0.32] | 0.0016 |
+| 1-day retention | 44.82% | 44.23% | −0.59pp [−1.24, +0.06]; bootstrap [−1.25, +0.06] | 0.074 (Holm 0.15) |
+| Game rounds in 14 days, mean | 52.46 | 51.30 | −1.16 [−3.72, +1.40] | 0.38 (Holm 0.38) |
+| Game rounds, median | 17 | 16 | −1 [−1, 0], bootstrap | |
+| Never played a round (guardrail) | 4.33% | 4.52% | +0.19pp [−0.08, +0.46], limit +1.0pp | ok |
+
+- **Decision: KILL, keep the gate at level 30.** No SRM at the 0.001 threshold, both arms past the 24,641 players they needed, the guardrail held, and the primary's interval is entirely below zero, so neither SHIP nor ITERATE applied. Relative to level 30 that's 4.3% fewer players back on day 7 (1.7% to 6.9%).
+- **One outlier, kept in.** Player 6390605 (`gate_30`) logged 49,854 rounds in 14 days, 3,561 a day; the next-highest player has 2,961 and the 99.9th percentile is 1,074. Without them, the game-rounds difference goes from −1.16 (p = 0.38) to −0.04 (p = 0.95). That's a sensitivity check and decides nothing; the primary can't be moved by one player.
+- **No CUPED.** Players were randomized at install, so there's no pre-experiment behavior to adjust with, and the in-test metrics could be moved by the gate.
+
+### EXP-001 interim read
+
+- **REAL: StudySprint live data, N = 0, underpowered (needs 1,377 per arm).** The live site has no PostHog key yet, so nothing has been collected.
+- **Underpowered, plainly:** at about 5 new users a day, the 8-week cap ends near 140 per arm. At that size the test catches the planned +5-point lift only 14.5% of the time, and the smallest lift it would catch 80% of the time is 16.2 points. A non-significant live result won't mean Quick Start doesn't work, and a significant one would most likely overstate the lift. The live run proves the plumbing; the decision rule will call it UNDERPOWERED and the product stays on control.
+- **SYNTHETIC full-size run** (seed 4, 3,581 users, true effect +5.0 points): SHIP, +9.9pp [+6.5, +13.4]. That's the Day 5 example, one draw that overshoots the truth; over 40 seeds the readout averaged +5.12.
+
+### Checks
+
+| Check | Result |
+|---|---|
+| `uv run pytest` | Pass, 194 tests (167 before) in 64 s. New: REAL labels with N and "underpowered"; bootstrap of mean and median; proportion guardrails; interim reads at any N that decide nothing; the Cookie Cats loader (bad columns, duplicates, flags), the outlier check and the readout on a built file; the real CSV against its published numbers; the dashboard's data layer against Day 3's and Day 5's numbers; the sample-size calculator against the power module; the metric tree against METRICS.md; every page run headless with Streamlit's AppTest, each with its badge; the Experiments page through all three choices and the calculator; the saved EXP-000 readout against a fresh read of the CSV. CI has no CSV, so the two tests that need it skip there. |
+| `ruff check`, `ruff format --check` | Clean. |
+| Dashboard in a browser | All five pages in light mode and the Experiments page in dark, at 1400 px: no errors, every chart drawn, every badge present. |
+| Kaggle CSV and `.env` | Neither is tracked (`data/raw/*.csv` and `.env` are gitignored). |
+
+### Decisions
+
+- **Everything set after seeing the data is marked in EXP-000**, and the memo names the one choice that could have changed the answer: with an MDE below 0.75 points the read would have needed more players than the smaller arm has, and it would have said UNDERPOWERED instead of KILL.
+- **Outliers are reported, not dropped.** The analysis of record keeps every player; the cap only decides who gets listed and the with/without comparison.
+- **The dashboard runs with no data.** With no warehouse it builds the synthetic run, and without the CSV it shows the saved EXP-000 readout, which a test keeps equal to a fresh read.
+- **An uploaded CSV gets its required N from its own control arm**, so the readout says whether that file could detect the MDE, not what a plan would have said.
+- **Streamlit is a uv dependency group installed by default**, so CI runs the dashboard tests and Community Cloud gets the same locked versions.
+
+### Worth knowing
+
+- **Cookie Cats' SRM p = 0.0086 passes at 0.001 but would fail at 0.01.** The arms differ by 789 players. The file doesn't say why; it's in the memo's risks.
+- **The effect is small in points and not in share**: under one point of 7-day retention, but 4.3% of the players who'd otherwise have stayed.
+- **The deployed dashboard can't show live StudySprint data.** The warehouse is local, so a Community Cloud app shows the synthetic run and EXP-001's REAL tab at N = 0.
+
+### Open
+
+- **PostHog by hand**, still: the `phc_` key as the `VITE_POSTHOG_KEY` repository variable plus a deploy rerun, "Discard client IP data", then create and launch the experiment. Set `launch:` in EXP-001.yaml on launch day.
+- The personal API key and project ID in `.env` for `liftlab export-posthog`.
+- Optional: deploy the dashboard to Community Cloud (steps in the README).
+
+### Next: Day 7
+
+The last day. EXP-001 can't collect a single real user until the PostHog key is in.
