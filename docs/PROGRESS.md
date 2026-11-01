@@ -479,3 +479,63 @@ From `uv run liftlab cookie-cats`. Players were randomized at install to `gate_3
 ### Next: Day 7
 
 The last day. EXP-001 can't collect a single real user until the PostHog key is in.
+
+## Day 7, 2026-11-01: case study, one CI workflow, v1.0.0
+
+LiftLab is finished at v1.0.0. The README is now a case study, CI checks the analysis and the app on every push, and the repo has a description, topics, a contributing guide and issue templates. Labels stay as before: Cookie Cats numbers are **REAL**, StudySprint's live data is **REAL** with N = 0, and every other product and simulation number is **SYNTHETIC**.
+
+### Done
+
+- **One CI workflow.** `.github/workflows/ci.yml` replaces `analysis.yml` (a rename, agreed with Arnab, so its history carries over). Two jobs on every push and pull request: `analysis` (uv sync, ruff, ruff format, pytest) and `app` (npm ci, a new `typecheck` script, vitest, build). The simulation tests run small, about a minute; the full hour-long proofs stay a manual `liftlab proofs`. The two tests that need the Kaggle CSV skip in CI. `deploy-app.yml` is unchanged.
+- **The README as a case study**, in this order: the pitch and links, a 90-second summary, the product and its North Star with the metric-tree image, what the data showed (SYNTHETIC funnel and retention; REAL N = 0), EXP-001 and EXP-000, the statistical proofs with their charts, key decisions and trade-offs, quickstart, a Mermaid architecture diagram, the tech stack, Now/Next/Later and limitations. Badges for CI, the deploy, the release and the license.
+- **ADRs 0002 to 0004** in `docs/decisions/`, recording decisions made on Days 1 to 6 and dated when they were made: anonymous analytics with privacy in code, validating the statistics where the answer is known, and a fixed read with the mSPRT only for monitoring. Each says it was recorded today and which log it comes from.
+- **EXP-001's interim readout gained a recommendation**, so both experiments have a decision memo: launch EXP-001 to prove the plumbing, and don't ship or kill Quick Start on its result.
+- **Repo polish.** Description and the eight topics set with `gh repo edit` (product-management, ab-testing, experimentation, product-analytics, posthog, growth, cuped, sequential-testing). `CONTRIBUTING.md` with setup, the checks CI runs and the project's rules. Three issue forms: a StudySprint bug, a number that looks wrong (asks whether it's REAL or SYNTHETIC), and an experiment idea in the backlog's hypothesis format.
+- **[docs/RESUME.md](RESUME.md)**: three sets of resume bullets (product, data science, engineering), a two-sentence pitch, five likely interview questions with answer outlines, and a table of every quotable number with its label and source.
+- **Version 1.0.0** in `analysis/pyproject.toml`, `liftlab.__version__` and `app/package.json`, then the `v1.0.0` tag and a GitHub release.
+
+### History check before tagging
+
+Every commit on every branch (60, through this entry) was checked before the tag:
+
+| Check | Result |
+|---|---|
+| Files ever added matching `.env`, `*.csv`, `*.duckdb`, `.wal`, `.parquet`, `.sqlite`, `.pem`, `.key` or `secrets` | Only `.env.example` and `app/.env.example`. |
+| Every version of those two templates | Empty values, plus the public PostHog host URLs. |
+| Token patterns in every revision (`phc_`, `phx_`, `ghp_`, `github_pat_`, `AKIA`, private-key headers, Slack and OpenAI-style keys) | None. |
+| PostHog env vars assigned a value anywhere | Only placeholders in ANALYTICS.md and an empty test fixture. |
+| Cookie Cats rows (`<id>,gate_30,...`) in any revision | None. |
+| Largest blob ever | 494 kB, a dashboard screenshot. |
+
+### Checks
+
+| Check | Result |
+|---|---|
+| `uv run pytest` | Pass, 194 tests in 64 s (CI: 192 passed, 2 skipped without the CSV). |
+| `ruff check`, `ruff format --check` | Clean. |
+| `npm run typecheck`, `npm test`, `npm run build` | Pass: 63 tests; 16.6 kB JS, 6.2 kB gzipped. |
+| CI | Green on every Day 7 push, both jobs: [run 41333667016](https://github.com/singha105/liftlab/actions/runs/41333667016) was the first. The deploy that the `package.json` change triggered also passed. |
+| Live StudySprint | https://singha105.github.io/liftlab/ returns 200. |
+| Links | Every relative link and heading anchor in the README and docs resolves (checked with a script), and all 15 external URLs return 200. |
+| README on GitHub | Rendered and looked at: images load in light and dark, and the Mermaid diagram was redrawn top-down after the first version came out clipped. |
+
+### Decisions
+
+- **Replace `analysis.yml` instead of running both.** Two workflows would have run the same tests twice on every push.
+- **No `slow` marker.** The slowest test takes about 5 s and the whole suite about a minute, so CI runs all of it. "Fast simulation tests only" is met by keeping the full-size proofs out of pytest, as they already were.
+- **The ADRs record decisions; they don't invent them.** Each one cites the day it was made, and nothing in them is new.
+- **No resume claim about real users.** StudySprint has none yet, so the bullets claim what was built and measured: the plan, the proofs (SYNTHETIC) and the Cookie Cats call (REAL).
+
+### LiftLab at v1.0.0
+
+- **Product:** StudySprint, live on GitHub Pages, 6.2 kB of gzipped JS, anonymous analytics wired up and waiting on a PostHog key.
+- **Metrics:** a North Star (weekly completed sessions) with an exact three-factor identity, a metric tree, a tracking plan enforced by tests, and seven SQL models checked against ground truth.
+- **Experiments:** EXP-001 pre-registered before its code (needs 1,377 per arm, not reachable at about 5 users a day), and EXP-000's real decision on 90,189 players: keep the gate at level 30.
+- **Statistics:** SRM, z and Welch, delta method, bootstrap, CUPED, mSPRT and Holm, each cross-checked and proven on simulations (SYNTHETIC: A/A 5.8%, peeking 27.3% vs mSPRT 1.7%, CUPED −22% variance, power 81.8%).
+- **Tests:** 194 in Python and 63 in the app.
+
+### Open
+
+- **PostHog by hand**: the `phc_` key as the `VITE_POSTHOG_KEY` repository variable plus a deploy rerun, "Discard client IP data", then create and launch EXP-001 and set `launch:` in EXP-001.yaml. The 8-week limit runs from that day.
+- The personal API key and project ID in `.env` for `liftlab export-posthog`.
+- Optional: deploy the dashboard to Streamlit Community Cloud (steps in the README).
