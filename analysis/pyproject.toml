@@ -1,6 +1,6 @@
 [project]
 name = "liftlab"
-version = "0.1.0"
+version = "1.0.0"
 description = "Event warehouse, product metrics and experiment statistics for StudySprint"
 authors = [
     { name = "Arnab Singh", email = "singha105@udayton.edu" }
