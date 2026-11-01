@@ -9,7 +9,8 @@ from liftlab.readout import SYNTHETIC_LABEL, load_config
 from liftlab.stats.sequential import msprt
 from liftlab.stats.tests import ratio_metric
 
-CONFIG = load_config(cli.EXP_001_CONFIG)
+# Without the live launch date: these simulated runs start at LAUNCH, their first exposure.
+CONFIG = {k: v for k, v in load_config(cli.EXP_001_CONFIG).items() if k != "launch"}
 LAUNCH = datetime(2026, 11, 2)
 SIX_WEEKS = LAUNCH + timedelta(weeks=6)
 

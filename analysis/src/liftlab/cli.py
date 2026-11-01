@@ -444,6 +444,9 @@ def _write(result, args, summary: str) -> int:
 
 def _monitor(con, args) -> int:
     config = readout.load_config(args.config)
+    if args.source != "posthog":
+        # `launch` is the live run's date; a simulated run starts at its own first exposure.
+        config = {key: value for key, value in config.items() if key != "launch"}
     users = readout.experiment_users(con, config["key"], args.source)
     if users.empty:
         print(f"No users exposed to {config['key']} in the {args.source} data.", file=sys.stderr)
