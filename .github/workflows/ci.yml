@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: analysis
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          # The version that wrote uv.lock, so --locked can't fail on a newer lock format.
+          version: "0.12.23"
+          working-directory: analysis
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      # The simulation tests run small: the 20,000-user ground-truth checks and each proof at a
+      # few runs, about a minute in all. The full proofs (`liftlab proofs`, about an hour) run by
+      # hand. Tests that need the Kaggle CSV skip, since it's never committed.
+      - run: uv run pytest
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # The tracking-plan test reads docs/TRACKING_PLAN.md, so this job checks out the whole repo.
+      - run: npm test
+      # No PostHog key here: the build is the one a fork or a local checkout gets.
+      - run: npm run build
