@@ -34,7 +34,7 @@ The North Star is **weekly completed sessions**: focus sessions that ran to the 
 
 ## What the data showed
 
-StudySprint has no PostHog key yet, so it has sent no events: **REAL: StudySprint live data, N = 0.** The product numbers come from the simulator (seed 7, 20,000 users), whose behavior is built from the [experiment backlog's](docs/EXPERIMENT_BACKLOG.md) assumed baselines. They show that the SQL measures what it should. They can't show how real students behave.
+StudySprint started sending events to PostHog on 2026-11-01 and has no real users yet: **REAL: StudySprint live data, N = 0.** The product numbers come from the simulator (seed 7, 20,000 users), whose behavior is built from the [experiment backlog's](docs/EXPERIMENT_BACKLOG.md) assumed baselines. They show that the SQL measures what it should. They can't show how real students behave.
 
 **Activation funnel (SYNTHETIC).** New users with 7 full days of data:
 
@@ -64,7 +64,7 @@ The SQL is tested against the simulator's truth. On seed 7, activation came out 
 - **Power.** Baseline 30.0% (SYNTHETIC), MDE +5 points, alpha 0.05, power 0.80: **1,377 users per arm**. Detecting +3 points would take 3,763.
 - **Honest feasibility.** At about 5 eligible new users a day, 1,377 per arm takes 551 days. The live run is capped at 8 weeks, about 140 per arm, where it catches a +5-point lift only 14.5% of the time; the smallest lift it would catch 80% of the time is 16.2 points. So the live run is there to prove the flag, exposure and export, and the decision rule will call it UNDERPOWERED. ([ADR 0003](docs/decisions/0003-validate-where-the-answer-is-known.md))
 - **Checked before launch (SYNTHETIC).** 200 simulated runs at a true +5 points detected it 78.5% of the time (expected 79.6%), and 2,400 runs with no effect flagged 5.6%. A full-size simulated read says SHIP at +9.9 points (95% CI +6.5 to +13.4) against a true +5.0; over 40 seeds the mean estimate was +5.12 and 36 of 40 intervals covered the truth.
-- **Status.** Not launched: REAL N = 0. [Interim readout and recommendation](docs/experiments/EXP-001-interim.md).
+- **Status.** Launched 2026-11-01; it runs to 1,377 per arm or the 8-week limit on 2026-12-27. REAL N = 0 so far. [Interim readout and recommendation](docs/experiments/EXP-001-interim.md).
 
 ### EXP-000: Cookie Cats, a real decision
 

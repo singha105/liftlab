@@ -8,7 +8,7 @@ treatment: test
 alpha: 0.05
 srm_threshold: 0.001
 required_per_arm: 1377
-# launch: 2026-11-02  # set on launch day; weekly checks count from it (default: first exposure)
+launch: 2026-11-01  # launched in PostHog 2026-11-01 18:46 UTC; weekly checks count from it
 # Who is analyzed: every listed column must be true. New users with a closed 24-hour window.
 population: [new_at_exposure, activation_window_closed]
 

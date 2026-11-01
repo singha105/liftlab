@@ -67,7 +67,7 @@ I built a small product, a study timer, and everything a growth team would use t
 |---|---|---|
 | 90,189 players; 7-day retention 19.02% → 18.20%, −0.82 points [−1.33, −0.31], p = 0.0016 | REAL | [EXP-000 memo](experiments/EXP-000-memo.md) |
 | SRM p = 0.0086; 24,641 players per arm needed; outlier at 49,854 rounds | REAL | [EXP-000 memo](experiments/EXP-000-memo.md) |
-| StudySprint live users: 0 (no PostHog key yet) | REAL | [EXP-001 interim](experiments/EXP-001-interim.md) |
+| StudySprint live users: 0 (EXP-001 launched 2026-11-01) | REAL | [EXP-001 interim](experiments/EXP-001-interim.md) |
 | 1,377 users per arm; 551 days at 5 a day; 140 per arm at the 8-week cap: 14.5% power, MDE 16.2 points | plan | [EXP-001](experiments/EXP-001.md), [interim](experiments/EXP-001-interim.md) |
 | Peeking 27.3% vs mSPRT 1.7%; A/A 5.8%; CUPED −22% variance; power 81.8% | SYNTHETIC | [STATS.md](STATS.md) |
 | Funnel: 50.5% of new users never start; activation 30.0% | SYNTHETIC | [ANALYTICS.md](ANALYTICS.md) |

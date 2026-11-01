@@ -539,3 +539,37 @@ Every commit on every branch (60, through this entry) was checked before the tag
 - **PostHog by hand**: the `phc_` key as the `VITE_POSTHOG_KEY` repository variable plus a deploy rerun, "Discard client IP data", then create and launch EXP-001 and set `launch:` in EXP-001.yaml. The 8-week limit runs from that day.
 - The personal API key and project ID in `.env` for `liftlab export-posthog`.
 - Optional: deploy the dashboard to Streamlit Community Cloud (steps in the README).
+
+## 2026-11-01, after v1.0.0: PostHog live, EXP-001 launched
+
+StudySprint now sends its planned events to PostHog, and EXP-001 is running. Nothing here changes the pre-registration: the primary metric, sample size and decision rule are as written on 2026-10-30, with the two dated amendments.
+
+### Done
+
+- **PostHog project** "StudySprint" on US Cloud (project 703127). "Discard client IP data" is on. Onboarding was limited to Product Analytics, Feature Flags and Experiments; Session Replay was left off and the SDK install skipped.
+- **The key in the build.** Arnab added `VITE_POSTHOG_KEY` as a repository variable, and the Deploy app workflow was rerun ([run 41336979527](https://github.com/singha105/liftlab/actions/runs/41336979527), build and deploy green). The live footer reads "Usage events go to PostHog".
+- **Live check, in demo mode** (`?demo=1`, so every event carries `is_demo: true`): one sprint finished and one given up. PostHog received exactly the planned names, `app_opened`, `session_started`, `session_completed`, `session_abandoned` and `streak_viewed`, and nothing automatic: no `$pageview`, autocapture, `$feature_flag_called` or recordings.
+- **EXP-001 in PostHog** (experiment 545109), following [the setup doc](experiments/EXP-001-posthog-setup.md), which was corrected where PostHog's UI differed from it:
+  - Flag `exp-001`: `control` and `test` at 50/50, 100% rollout, no release conditions.
+  - Exposure: `experiment_exposed` where `experiment_key = exp-001` and `is_demo = false`; users seen in both arms are excluded.
+  - Metrics: Activation (24 h) as a funnel to `session_completed`; completed sessions per user over 7 days; the abandon rate as abandoned ÷ started over 7 days, goal decrease. The page-load guardrail stays warehouse-only.
+  - Statistics: Frequentist at 95%, with PostHog's sequential testing and CUPED off.
+- **Launched 2026-11-01 at 18:46 UTC**, with Arnab's go-ahead. `launch: 2026-11-01` is set in EXP-001.yaml, so weekly checks count from today, and the 8-week limit ends on 2026-12-27. The README, RESUME and EXP-001's status line now say it's running.
+- **`liftlab monitor` uses `launch:` only for PostHog data.** Setting the live date made the synthetic monitor, and two of its tests, count weeks from 2026-11-01 instead of the simulated run's own start. Simulated runs now start at their first exposure, as before. 194 tests pass; ruff is clean.
+
+### Decisions
+
+- **Exposure set before launch.** PostHog only lists events it has seen, and nobody can be exposed while the flag is off, so `experiment_exposed` was registered under Event definitions first. The experiment launched with its final settings and hasn't been edited since.
+- **No self-enrolling smoke test.** Opening the live site as a new visitor would put a fake user into the REAL data. The first real visitor's exposure is the check instead, and every check so far used demo mode for the same reason.
+
+### Worth knowing
+
+- PostHog's Activity list showed new events several minutes late while Event definitions already had them. Nothing was lost.
+- `is_demo = false` is stored as the text "false" on a property PostHog types as Boolean. When the first real exposure arrives, check that the experiment page counts it.
+
+### Open
+
+- The first real exposure: exactly one `experiment_exposed` per user, `$feature/exp-001` matching `variant`, and the experiment page counting it.
+- Weekly from 2026-11-08: SRM and guardrails only (`liftlab monitor`), as pre-registered. The primary is read once, at 1,377 per arm or on 2026-12-27.
+- The personal API key and project ID in `.env` for `liftlab export-posthog`.
+- Optional: deploy the dashboard to Streamlit Community Cloud.
