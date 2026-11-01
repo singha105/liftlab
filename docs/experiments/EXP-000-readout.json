@@ -1,0 +1,248 @@
+{
+  "key": "exp-000",
+  "name": "EXP-000 Cookie Cats gate at level 40",
+  "synthetic": false,
+  "label": "REAL: Cookie Cats mobile game A/B test, public Kaggle data, N = 90,189",
+  "decision": "KILL",
+  "action": "keep the gate at level 30",
+  "reasons": [
+    "Not INVALID: no sample ratio mismatch (p = 0.0086)",
+    "Not UNDERPOWERED: both arms reached 24,641 users",
+    "Not KILL: no guardrail regressed beyond its threshold",
+    "Not SHIP: 7-day retention CI [-1.3pp, -0.3pp] includes or is below 0",
+    "Not ITERATE: 7-day retention point estimate -0.8pp is below half the MDE (+0.5pp)"
+  ],
+  "users": {
+    "gate_30": 44700,
+    "gate_40": 45489
+  },
+  "dropped_multiple_arms": 0,
+  "required_per_arm": 24641,
+  "srm": {
+    "observed": {
+      "gate_30": 44700,
+      "gate_40": 45489
+    },
+    "expected": {
+      "gate_30": 45094.5,
+      "gate_40": 45094.5
+    },
+    "chi2": 6.9024049496058275,
+    "df": 1,
+    "p_value": 0.008607987810836243,
+    "threshold": 0.001,
+    "mismatch": false
+  },
+  "primary": {
+    "name": "7-day retention",
+    "type": "proportion",
+    "comparison": {
+      "method": "two-proportion z-test",
+      "n_control": 44700,
+      "n_test": 45489,
+      "control": 0.19020134228187918,
+      "test": 0.18200004396667327,
+      "diff": -0.008201298315205913,
+      "se": 0.0025920140082940444,
+      "ci": [
+        -0.013281552418885545,
+        -0.0031210442115262808
+      ],
+      "relative": -0.043119034896460184,
+      "relative_ci": [
+        -0.06924457700961774,
+        -0.01699349278330263
+      ],
+      "statistic": -3.164358912748191,
+      "p_value": 0.0015542499756143289,
+      "alpha": 0.05,
+      "df": null
+    },
+    "holm_p": null,
+    "bootstraps": [
+      {
+        "statistic": "mean",
+        "control": 0.19020134228187918,
+        "test": 0.18200004396667327,
+        "diff": {
+          "estimate": -0.008201298315205913,
+          "ci": [
+            -0.013504774367606538,
+            -0.0032071989230820766
+          ],
+          "se": 0.0025861882009338617,
+          "n_resamples": 2000,
+          "level": 0.95
+        }
+      }
+    ]
+  },
+  "adjusted": null,
+  "adjusted_label": null,
+  "guardrails": [
+    {
+      "name": "Players who never played a round",
+      "type": "proportion",
+      "control": 0.043333333333333335,
+      "test": 0.04521972344962518,
+      "diff": 0.0018863901162918459,
+      "ci": [
+        -0.0007985071031288088,
+        0.004571287335712501
+      ],
+      "threshold": "+1.0pp",
+      "regressed": false,
+      "detail": "test - control +0.2pp against a limit of +1.0pp"
+    }
+  ],
+  "secondaries": [
+    {
+      "name": "1-day retention",
+      "type": "proportion",
+      "comparison": {
+        "method": "two-proportion z-test",
+        "n_control": 44700,
+        "n_test": 45489,
+        "control": 0.4481879194630872,
+        "test": 0.44228274967574577,
+        "diff": -0.005905169787341458,
+        "se": 0.003309892280304391,
+        "ci": [
+          -0.012392439449445217,
+          0.0005820998747623016
+        ],
+        "relative": -0.01317565585974656,
+        "relative_ci": [
+          -0.02755409900174442,
+          0.001202787282251299
+        ],
+        "statistic": -1.7840862247974725,
+        "p_value": 0.07440965529691913,
+        "alpha": 0.05,
+        "df": null
+      },
+      "holm_p": 0.14881931059383827,
+      "bootstraps": [
+        {
+          "statistic": "mean",
+          "control": 0.4481879194630872,
+          "test": 0.44228274967574577,
+          "diff": {
+            "estimate": -0.005905169787341458,
+            "ci": [
+              -0.012483850989272289,
+              0.0005789961980630817
+            ],
+            "se": 0.0032684052420793954,
+            "n_resamples": 2000,
+            "level": 0.95
+          }
+        }
+      ]
+    },
+    {
+      "name": "Game rounds in the first 14 days",
+      "type": "mean",
+      "comparison": {
+        "method": "Welch t-test",
+        "n_control": 44700,
+        "n_test": 45489,
+        "control": 52.45626398210291,
+        "test": 51.29877552814966,
+        "diff": -1.157488453953249,
+        "se": 1.3072504173054773,
+        "ci": [
+          -3.7197051164946457,
+          1.4047282085881476
+        ],
+        "relative": -0.022065781397397344,
+        "relative_ci": [
+          -0.06998117972361145,
+          0.025849616928816765
+        ],
+        "statistic": -0.885437433127067,
+        "p_value": 0.3759243840932616,
+        "alpha": 0.05,
+        "df": 58595.481422574
+      },
+      "holm_p": 0.3759243840932616,
+      "bootstraps": [
+        {
+          "statistic": "median",
+          "control": 17.0,
+          "test": 16.0,
+          "diff": {
+            "estimate": -1.0,
+            "ci": [
+              -1.0,
+              0.0
+            ],
+            "se": 0.2617785591048348,
+            "n_resamples": 2000,
+            "level": 0.95
+          }
+        }
+      ]
+    }
+  ],
+  "outliers": {
+    "cap": 10000,
+    "outliers": [
+      {
+        "user_id": 6390605,
+        "variant": "gate_30",
+        "rounds": 49854,
+        "rounds_per_day": 3561.0,
+        "retention_1": false,
+        "retention_7": true
+      }
+    ],
+    "largest_below_cap": 2961,
+    "p99": 493.0,
+    "p999": 1073.6240000000107,
+    "with_all": {
+      "method": "Welch t-test",
+      "n_control": 44700,
+      "n_test": 45489,
+      "control": 52.45626398210291,
+      "test": 51.29877552814966,
+      "diff": -1.157488453953249,
+      "se": 1.3072504173054773,
+      "ci": [
+        -3.7197051164946457,
+        1.4047282085881476
+      ],
+      "relative": -0.022065781397397344,
+      "relative_ci": [
+        -0.06998117972361145,
+        0.025849616928816765
+      ],
+      "statistic": -0.885437433127067,
+      "p_value": 0.3759243840932616,
+      "alpha": 0.05,
+      "df": 58595.481422574
+    },
+    "without": {
+      "method": "Welch t-test",
+      "n_control": 44699,
+      "n_test": 45489,
+      "control": 51.342110561757536,
+      "test": 51.29877552814966,
+      "diff": -0.04333503360787461,
+      "se": 0.683795463147519,
+      "ci": [
+        -1.383567501642639,
+        1.2968974344268898
+      ],
+      "relative": -0.0008440446474390351,
+      "relative_ci": [
+        -0.026936677840425905,
+        0.025248588545547835
+      ],
+      "statistic": -0.06337426312892294,
+      "p_value": 0.949468621546446,
+      "alpha": 0.05,
+      "df": 90183.2980628123
+    }
+  }
+}
