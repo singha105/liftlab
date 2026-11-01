@@ -16,6 +16,7 @@ primary:
   name: Activation rate
   type: proportion
   column: activated
+  baseline: 0.30  # the planning baseline (synthetic), for interim power
   mde: 0.05
   # Sensitivity check only: the decision uses the unadjusted estimate. CUPED's pre-period
   # covariate is 0 for every new user, so EXP-001 adjusts for attributes fixed before

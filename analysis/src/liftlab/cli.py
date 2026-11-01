@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from liftlab import dryrun, monitor, posthog_export, proofs, readout, warehouse
+from liftlab import cookie_cats, dryrun, monitor, posthog_export, proofs, readout, warehouse
 from liftlab.simulate import Experiment, simulate
 from liftlab.stats import power as pw
 
@@ -74,6 +74,16 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--source", choices=warehouse.SOURCES, default="posthog")
     read.add_argument("--format", choices=("markdown", "json"), default="markdown")
     read.add_argument("--out", type=Path, help="write the readout here instead of printing it")
+    read.add_argument(
+        "--interim", action="store_true", help="the read so far, at any N; decides nothing"
+    )
+
+    cats = commands.add_parser("cookie-cats", help="EXP-000: read the public Cookie Cats test")
+    cats.add_argument("--path", type=Path, default=cookie_cats.DEFAULT_CSV, help="Kaggle CSV")
+    cats.add_argument("--config", type=Path, default=cookie_cats.CONFIG, help="experiment YAML")
+    cats.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    cats.add_argument("--out", type=Path, help="write the readout here instead of printing it")
+    cats.add_argument("--charts", type=Path, help="also write EXP-000's charts to this folder")
 
     watch = commands.add_parser("monitor", help="an experiment's weekly SRM and guardrail checks")
     watch.add_argument("--config", type=Path, default=EXP_001_CONFIG, help="experiment YAML")
@@ -97,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         return _dry_run(args)
     if args.command == "proofs":
         return _proofs(args)
+    if args.command == "cookie-cats":
+        return _cookie_cats(args)
     con = warehouse.connect(args.db)
     if args.command == "load":
         return _load(con, args)
@@ -380,15 +392,41 @@ def _proofs(args) -> int:
 def _readout(con, args) -> int:
     config = readout.load_config(args.config)
     users = readout.experiment_users(con, config["key"], args.source)
+    if args.interim:
+        result = readout.interim(readout.population(users, config), config, args.source)
+        return _write(result, args, f"{min(result.users.values()):,} per arm")
     if users.empty:
         print(f"No users exposed to {config['key']} in the {args.source} data.", file=sys.stderr)
+        print(readout.real_label(config, {}, args.source), file=sys.stderr)
         return 1
     analyzed = readout.at_required_n(readout.population(users, config), config)
     result = readout.build_readout(analyzed, config)
+    return _write(result, args, result.decision)
+
+
+def _cookie_cats(args) -> int:
+    if not args.path.exists():
+        print(
+            f"No Cookie Cats CSV at {args.path}. Download it from {cookie_cats.KAGGLE_URL} "
+            "and save it there.",
+            file=sys.stderr,
+        )
+        return 1
+    users = cookie_cats.load(args.path)
+    result = cookie_cats.read(users, readout.load_config(args.config))
+    if args.charts:
+        from liftlab import experiment_charts  # matplotlib is a dev dependency
+
+        for path in experiment_charts.save_cookie_cats(result, users, args.charts):
+            print(f"wrote {path}", file=sys.stderr)
+    return _write(result, args, result.readout.decision)
+
+
+def _write(result, args, summary: str) -> int:
     text = result.to_markdown() if args.format == "markdown" else result.to_json() + "\n"
     if args.out:
         args.out.write_text(text)
-        print(f"{result.decision}: wrote {args.out}")
+        print(f"{summary}: wrote {args.out}")
     else:
         print(text, end="")
     return 0

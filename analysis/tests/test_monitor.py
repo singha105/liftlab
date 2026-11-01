@@ -148,6 +148,12 @@ def test_markdown_and_json_are_labeled():
     assert m.to_dict()["label"] == SYNTHETIC_LABEL
     assert '"status": "KILL"' in m.to_json()
 
+    users = _users(per_week=(10, 10))
+    users["source"] = "posthog"
+    real = monitor.weekly_checks(users, CONFIG, LAUNCH + timedelta(weeks=3))
+    label = "REAL: StudySprint live data, N = 60, underpowered (needs 1,377 per arm)"
+    assert real.label == label and real.to_markdown().count(label) == 2
+
 
 def test_cli_monitor(tmp_path, capsys):
     db = str(tmp_path / "warehouse.duckdb")

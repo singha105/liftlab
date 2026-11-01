@@ -9,6 +9,8 @@ from conftest import build_warehouse, event
 from liftlab import cli, readout, warehouse
 from liftlab.readout import SYNTHETIC_LABEL, at_required_n, build_readout, load_config, population
 from liftlab.simulate import Experiment, simulate
+from liftlab.stats import power as pw
+from liftlab.stats.bootstrap import bootstrap_ci
 from liftlab.stats.tests import ratio_metric, welch_ttest, ztest_proportions
 
 CONFIG = load_config(cli.EXP_001_CONFIG)
@@ -163,9 +165,96 @@ def test_markdown_and_json_are_labelled_synthetic():
     assert data["label"] == SYNTHETIC_LABEL
     assert data["srm"]["mismatch"] is False
 
+
+def test_real_readouts_are_labelled_with_their_n():
     real = build_readout(_users(activation=(0.30, 0.33), source="posthog"), CONFIG)
+    label = "REAL: StudySprint live data, N = 3,000"
+    assert real.label == label and not real.synthetic
     assert SYNTHETIC_LABEL not in real.to_markdown()
-    assert "label" not in json.loads(real.to_json())
+    assert real.to_markdown().count(label) == 2
+    assert json.loads(real.to_json())["label"] == label
+
+    small = build_readout(_users(n=(20, 17), source="posthog"), CONFIG)
+    assert small.decision == "UNDERPOWERED"
+    assert small.label == "REAL: StudySprint live data, N = 37, underpowered (needs 1,377 per arm)"
+    mixed = pd.concat([_users(n=(5, 5)), _users(n=(5, 5), source="posthog")], ignore_index=True)
+    assert build_readout(mixed, CONFIG).label.startswith("REAL: None data")
+    named = build_readout(_users(source="csv"), _config(label="REAL: a public test"))
+    assert named.label == "REAL: a public test, N = 3,000"
+
+
+def test_bootstrap_statistics_and_proportion_guardrails():
+    users = _users(activation=(0.30, 0.34), sessions=(1.4, 1.6), seed=2)
+    users["never_started"] = users.index % 10 == 0
+    primary = {**CONFIG["primary"], "bootstrap": ["mean"]}
+    secondary = [{**CONFIG["secondary"][0], "bootstrap": ["mean", "median"]}]
+    guardrail = {"name": "Never started", "type": "proportion", "column": "never_started",
+                 "max_increase": 0.01}  # fmt: skip
+    config = _config(
+        primary=primary,
+        secondary=secondary,
+        guardrails=[guardrail],
+        bootstrap_resamples=500,
+        actions={"SHIP": "make Quick Start the default"},
+    )
+    r = build_readout(users, config)
+    c, t = users[users.variant == "control"], users[users.variant == "test"]
+
+    (rate,) = r.primary.bootstraps
+    expected = bootstrap_ci(
+        lambda a, b: b.mean(axis=1) - a.mean(axis=1),
+        c.activated.to_numpy(float),
+        t.activated.to_numpy(float),
+        n_resamples=500,
+        seed=0,
+    )
+    assert rate.diff == expected
+    assert (rate.control, rate.test) == pytest.approx((c.activated.mean(), t.activated.mean()))
+    # The bootstrap and the Wald interval agree for a rate this far from 0 and 1.
+    assert rate.diff.ci == pytest.approx(r.primary.comparison.ci, abs=0.006)
+
+    mean, median = r.secondaries[0].bootstraps
+    assert mean.diff.estimate == pytest.approx(r.secondaries[0].comparison.diff)
+    sessions = (c.completed_sessions_7d.median(), t.completed_sessions_7d.median())
+    assert (median.control, median.test) == sessions
+    assert median.diff.estimate == sessions[1] - sessions[0]
+
+    (never,) = r.guardrails
+    flat = ztest_proportions(int(c.never_started.sum()), len(c), int(t.never_started.sum()), len(t))
+    assert (never.diff, never.ci, never.regressed) == (flat.diff, flat.ci, False)
+
+    markdown = r.to_markdown()
+    assert f"Bootstrap, difference in medians: {sessions[0]:.2f} → {sessions[1]:.2f}" in markdown
+    assert "(500 resamples of users)" in markdown
+    assert "Guardrail, Never started" in markdown and "(threshold +1.0pp) ok" in markdown
+    assert r.decision == "SHIP" and r.action == "make Quick Start the default"
+    assert "**Decision: SHIP, make Quick Start the default**" in markdown
+
+    with pytest.raises(ValueError, match="bootstrap statistics"):
+        build_readout(users, _config(primary={**primary, "bootstrap": ["p90"]}))
+
+
+def test_interim_reads_any_n_and_decides_nothing():
+    none = readout.interim(_users(n=(0, 0), source="posthog"), CONFIG, "posthog")
+    assert none.users == {"control": 0, "test": 0}
+    assert none.label == "REAL: StudySprint live data, N = 0, underpowered (needs 1,377 per arm)"
+    assert (none.power_at_mde, none.mde_at_n, none.readout) == (None, None, None)
+    assert "with no users the test can't detect +5.0pp" in none.to_markdown()
+
+    small = readout.interim(_users(n=(20, 17), source="posthog"), CONFIG)
+    assert small.power_at_mde == pytest.approx(pw.power_proportions(0.30, 0.05, 17))
+    assert small.mde_at_n == pytest.approx(pw.mde_proportions(0.30, 17))
+    assert small.readout is not None and small.readout.decision == "UNDERPOWERED"
+    text = small.to_markdown()
+    assert text.count(small.label) == 2 and "N = 37, underpowered" in small.label
+    assert "## The read so far" in text and "**Decision: UNDERPOWERED**" in text
+
+    # EXP-001.md: at the 8-week cap, about 140 per arm, it can only detect about 16 points.
+    capped = readout.interim(_users(n=(140, 140), source="posthog"), CONFIG)
+    assert capped.mde_at_n == pytest.approx(0.162, abs=0.001)
+    assert capped.power_at_mde == pytest.approx(0.145, abs=0.001)
+    synthetic = readout.interim(_users(n=(1500, 1500)), CONFIG)
+    assert synthetic.label == SYNTHETIC_LABEL
 
 
 # The experiment_users model
@@ -291,4 +380,8 @@ def test_cli_readout(tmp_path, capsys):
     assert data["label"] == SYNTHETIC_LABEL
     assert min(data["users"].values()) == 1377
     assert cli.main(["--db", db, "readout", "--source", "posthog"]) == 1
-    assert "No users exposed to exp-001" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "No users exposed to exp-001" in err
+    assert "REAL: StudySprint live data, N = 0, underpowered" in err
+    assert cli.main(["--db", db, "readout", "--source", "posthog", "--interim"]) == 0
+    assert "EXP-001 Quick Start: interim read, not a decision" in capsys.readouterr().out

@@ -61,6 +61,7 @@ class Monitor:
     key: str
     name: str
     synthetic: bool
+    label: str  # REAL or SYNTHETIC
     launch: datetime
     as_of: datetime
     status: str  # CONTINUE, INVALID or KILL
@@ -69,10 +70,7 @@ class Monitor:
     bounds: tuple[Bound, ...]
 
     def to_dict(self) -> dict:
-        data = asdict(self)
-        if self.synthetic:
-            data["label"] = readout.SYNTHETIC_LABEL
-        return data
+        return asdict(self)
 
     def to_json(self) -> str:
         return json.dumps(readout._plain(self.to_dict()), indent=2, default=str)
@@ -148,10 +146,16 @@ def weekly_checks(users: pd.DataFrame, config: dict, as_of: datetime) -> Monitor
             "beyond its threshold"
         )
 
+    sources = users["source"].unique() if "source" in users else []
+    synthetic = len(sources) > 0 and all(source == "synthetic" for source in sources)
+    exposed_so_far = _counts(users[(exposed <= as_of).to_numpy()], (control_arm, treatment_arm))
     return Monitor(
         key=config["key"],
         name=config["name"],
-        synthetic=bool("source" in users and (users["source"] == "synthetic").all()),
+        synthetic=synthetic,
+        label=readout.SYNTHETIC_LABEL
+        if synthetic
+        else readout.real_label(config, exposed_so_far, sources[0] if len(sources) == 1 else None),
         launch=launch,
         as_of=as_of,
         status=status,
@@ -257,9 +261,7 @@ def _format(value: float, unit: str) -> str:
 def _markdown(m: Monitor) -> str:
     control, treatment = (m.looks[0].users if m.looks else {"control": 0, "test": 0}).keys()
     title = "CONTINUE" if m.status == "CONTINUE" else f"STOP, {m.status}"
-    lines = [f"# {m.name}: weekly check, {title}", ""]
-    if m.synthetic:
-        lines += [f"**{readout.SYNTHETIC_LABEL}**", ""]
+    lines = [f"# {m.name}: weekly check, {title}", "", f"**{m.label}**", ""]
     lines += [
         f"Launch {m.launch:%Y-%m-%d}, data through {m.as_of:%Y-%m-%d %H:%M}. The primary "
         "metric isn't looked at before the read. Guardrails show the estimate and its "
@@ -293,6 +295,5 @@ def _markdown(m: Monitor) -> str:
         lines.append("")
     lines += [f"**{title}**", ""]
     lines += [f"- {reason[0].upper()}{reason[1:]}" for reason in m.reasons]
-    if m.synthetic:
-        lines += ["", f"*{readout.SYNTHETIC_LABEL}*"]
+    lines += ["", f"*{m.label}*"]
     return "\n".join(lines) + "\n"

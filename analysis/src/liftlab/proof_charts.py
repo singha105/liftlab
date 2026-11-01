@@ -75,13 +75,13 @@ def _figure(theme: dict):
     return fig, ax
 
 
-def _finish(fig, ax, theme: dict, title: str, subtitle: str) -> None:
-    for label in (ax.xaxis.label, ax.yaxis.label):
-        label.set_color(theme["secondary"])
+def _finish(fig, ax, theme: dict, title: str, subtitle: str, label: str = SYNTHETIC_LABEL) -> None:
+    for axis_label in (ax.xaxis.label, ax.yaxis.label):
+        axis_label.set_color(theme["secondary"])
     fig.subplots_adjust(left=0.09, right=0.84, top=0.80, bottom=0.17)
     fig.text(0.09, 0.93, title, color=theme["ink"], fontsize=13, fontweight="bold")
     fig.text(0.09, 0.875, subtitle, color=theme["secondary"], fontsize=10)
-    fig.text(0.09, 0.03, SYNTHETIC_LABEL, color=theme["muted"], fontsize=8.5)
+    fig.text(0.09, 0.03, label, color=theme["muted"], fontsize=8.5)
     legend = ax.get_legend()
     if legend:
         legend.get_frame().set_alpha(0)
