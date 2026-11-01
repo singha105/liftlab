@@ -11,11 +11,13 @@ These are still open from Day 2. Without them the live site sends nothing.
 1. **Project.** PostHog Cloud, US region, project "StudySprint".
 2. **IP addresses.** Project settings → turn on **Discard client IP data**.
 3. **Project key in the build.** Copy the project API key (starts with `phc_`). In GitHub: singha105/liftlab → Settings → Secrets and variables → Actions → **Variables** tab → New repository variable, name `VITE_POSTHOG_KEY`, value the key. (Or tell me and I'll run `gh variable set VITE_POSTHOG_KEY` after you OK it.) Then Actions → Deploy app → Run workflow on `main`.
-4. **Check it's live.** Open https://singha105.github.io/liftlab/ in a private window, wait a few seconds, then look in PostHog under Activity for an `app_opened` event. The page footer should say "Usage events go to PostHog".
+4. **Check it's live.** Open https://singha105.github.io/liftlab/?demo=1 in a private window, wait a few seconds, then look in PostHog under Activity for an `app_opened` event. Demo mode marks every event `is_demo`, so the check doesn't add a fake user to the real numbers. The page footer should say "Usage events go to PostHog". New event names can take a few minutes to show in Activity; Data management → Event definitions lists them sooner.
 
 ## Create the experiment
 
 Experiments → **New experiment**. The wizard has three steps.
+
+PostHog's event pickers only offer events the project has already received. Steps 1 and 2 work on an empty project; step 3 needs the live site to have sent `app_opened` and the session events first. A demo sprint (`?demo=1`, finished once and abandoned once) sends them, marked `is_demo`. On a new project, PostHog first asks which products you want: pick Product Analytics, Feature Flags and Experiments only (no Session Replay), and skip the SDK install.
 
 ### Step 1: Description
 
@@ -37,8 +39,9 @@ Experiments → **New experiment**. The wizard has three steps.
 
 - **Exposure event:** choose **Custom event**, then select `experiment_exposed`.
 - Add two property filters on that event: `experiment_key` equals `exp-001`, and `is_demo` equals `false`.
+- PostHog won't have seen `experiment_exposed` before launch: the flag stays disabled while the experiment is a draft, so nobody is enrolled. Register the name first under Data management → Event definitions → **Create event** (exactly `experiment_exposed`; names can't be changed later). In the property filter, switch the category to **Event properties** and choose "show properties that haven't been seen with this event" to find `experiment_key` and `is_demo`, then type the values (`exp-001`, `false`).
 - **Multiple variant handling:** **Exclude from analysis**, the default.
-- **Filter test accounts:** turn it on if you've set up test account filters.
+- **Filter test accounts:** on (the default). The project's filter only drops people marked `$internal_or_test_user`, which anonymous StudySprint visitors never are, so it removes nobody.
 
 The app puts `$feature/exp-001` on `experiment_exposed`, which is how PostHog knows each user's arm. Nothing else needs it.
 
@@ -61,11 +64,11 @@ This matches the pre-registered definition to within seconds: PostHog starts the
 - **Abandon rate:** type **Ratio**. Numerator: `session_abandoned`, count. Denominator: `session_started`, count. Conversion window 7 days. PostHog can't see sessions that never send an end event, so its number runs a little low. The warehouse version, which counts those after 24 hours, is the one the decision rule uses.
 - **Page load:** PostHog has no p75 aggregation, so this guardrail lives only in the warehouse (`load_ms` on `app_opened` after exposure). Don't add it here.
 
-Click **Save as draft**.
+Click **Save as draft**. Leave Replay Vision off. Saving creates the `exp-001` flag in a disabled state; launching turns it on.
 
 ## Before launching
 
-1. On the experiment's page, open **Statistics** and choose **Frequentist** with a **95%** confidence level. The pre-registration uses a two-sided z-test at alpha 0.05, so PostHog's default Bayesian view would answer a different question.
+1. On the experiment's **Settings** tab, edit **Statistics** and choose **Frequentist** with a **95%** confidence level, sequential testing off (the team default). The pre-registration reads the primary once with a two-sided z-test at alpha 0.05, so PostHog's default Bayesian view would answer a different question. Leave CUPED disabled: new users have no pre-period.
 2. Open the linked feature flag and check: key `exp-001`, variants `control` and `test` at 50% each, rollout 100%, no conditions.
 3. Click **Launch**. Write the launch date into the Day log in PROGRESS.md: the 8-week limit counts from here.
 
