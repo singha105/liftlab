@@ -1,0 +1,51 @@
+# EXP-000's analysis plan in the form `liftlab cookie-cats` runs. EXP-000-cookie-cats.md is
+# the (retrospective) pre-registration and wins if the two ever disagree.
+key: exp-000
+name: EXP-000 Cookie Cats gate at level 40
+label: "REAL: Cookie Cats mobile game A/B test, public Kaggle data"
+arms: {gate_30: 0.5, gate_40: 0.5}  # planned allocation, checked by SRM
+control: gate_30
+treatment: gate_40
+alpha: 0.05
+srm_threshold: 0.001
+required_per_arm: 24641  # baseline 19.0% (the control arm), MDE 1.0pp, power 0.80
+bootstrap_resamples: 2000
+actions:
+  SHIP: move the gate to level 40
+  ITERATE: test again before moving the gate
+  KILL: keep the gate at level 30
+
+primary:
+  name: 7-day retention
+  type: proportion
+  column: retention_7
+  mde: 0.01
+  bootstrap: [mean]
+
+secondary:
+  - name: 1-day retention
+    type: proportion
+    column: retention_1
+    bootstrap: [mean]
+  - name: Game rounds in the first 14 days
+    type: mean
+    column: sum_gamerounds
+    bootstrap: [median]
+
+guardrails:
+  - name: Players who never played a round
+    type: proportion
+    column: no_rounds
+    max_increase: 0.01  # test - control, absolute
+
+# Players over this many rounds are investigated, and the game-rounds test is rerun without
+# them as a sensitivity check. Nobody is dropped from the analysis of record.
+plausible_rounds_cap: 10000
+
+decision_rule:
+  - {decision: INVALID, when: [srm_failed]}
+  - {decision: UNDERPOWERED, when: [below_required_n]}
+  - {decision: KILL, when: [guardrail_regressed]}
+  - {decision: SHIP, when: [primary_ci_above_zero, secondaries_not_below_zero]}
+  - {decision: ITERATE, when: [primary_at_least_half_mde]}
+  - {decision: KILL, when: [otherwise]}
