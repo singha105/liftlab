@@ -1,0 +1,37 @@
+name: Bug in StudySprint
+description: Something in the app doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please don't paste anything personal. StudySprint never needs your name, email or what you were studying to debug a problem.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open https://singha105.github.io/liftlab/?demo=1
+        2. Start a 15-minute sprint
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Firefox on Windows 11, Safari on iPhone
+    validations:
+      required: true
+  - type: checkboxes
+    id: demo
+    attributes:
+      label: Mode
+      options:
+        - label: This happens in demo mode (?demo=1) too

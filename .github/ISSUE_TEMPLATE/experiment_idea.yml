@@ -1,0 +1,38 @@
+name: Experiment idea
+description: A hypothesis for the experiment backlog.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Ideas are scored with ICE in docs/EXPERIMENT_BACKLOG.md. Activation is the input being targeted right now.
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: Because we see ..., we believe ... will increase ... .
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Which input in the metric tree does it move?
+      options:
+        - Activation rate
+        - Weekly active users
+        - Sessions started per active user
+        - Completion rate
+        - Retention (D1, D7, D28)
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: The change
+      description: What users in the test arm would see, and who is eligible.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and guardrails
+      description: What could get worse, such as abandon rate or page load time.

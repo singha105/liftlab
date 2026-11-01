@@ -1,0 +1,35 @@
+name: A number looks wrong
+description: A metric, readout, chart or statistical result that doesn't add up.
+labels: [bug]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where is it
+      description: The file, dashboard page or command, and the number.
+      placeholder: docs/experiments/EXP-000-readout.md, 7-day retention CI
+    validations:
+      required: true
+  - type: dropdown
+    id: label
+    attributes:
+      label: Is it labeled REAL or SYNTHETIC?
+      options:
+        - REAL
+        - SYNTHETIC
+        - Not labeled (that's a bug on its own)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: A reference value, another tool's result, or the definition in docs/METRICS.md it disagrees with.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The commands you ran, with any seed or options.
+      render: shell
