@@ -2,6 +2,10 @@
 
 Two reads of EXP-001, kept apart and labeled by where their users came from. Neither one decides anything: the live run hasn't launched, and the simulated one only shows what a full-size read looks like. Interim reads are covered by [Amendment 2](EXP-001.md#2-2026-10-31-before-launch-interim-reads).
 
+## Recommendation
+
+**Launch EXP-001 to prove the plumbing, and don't ship or kill Quick Start on its result.** The live run hasn't started (REAL: N = 0), and at StudySprint's traffic its 8-week cap ends near 140 users per arm, where the test catches the planned +5-point lift only 14.5% of the time. The pre-registered rule will call that read UNDERPOWERED, and the product stays on control. What the live run can show is that the flag splits real browsers about 50/50, exposure fires once per user, Quick Start sessions arrive tagged `quick_start`, and the export reaches the warehouse. The SYNTHETIC full-size run below shows the read working end to end; it says nothing about how well Quick Start works.
+
 ## REAL: StudySprint live data, N = 0
 
 From `uv run liftlab readout --source posthog --interim`:
